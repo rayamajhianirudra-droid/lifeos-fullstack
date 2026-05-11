@@ -9,16 +9,28 @@ function App() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [message, setMessage] = useState('');
+  const [foodLogs, setFoodLogs] = useState([]);
+  const [foodName, setFoodName] = useState('');
+  const [calories, setCalories] = useState('');
+  const [protein, setProtein] = useState('');
+  const [carbs, setCarbs] = useState('');
+  const [fat, setFat] = useState('');
+  const [selectedUserId, setSelectedUserId] = useState('');
 
-  useEffect(() => { fetchUsers(); }, []);
+  useEffect(() => { fetchUsers(); fetchFoodLogs(); }, []);
 
   const fetchUsers = async () => {
     try {
       const res = await axios.get(`${API}/users`);
       setUsers(res.data);
-    } catch (err) {
-      setMessage('Cannot connect to server.');
-    }
+    } catch (err) { setMessage('Cannot connect to server.'); }
+  };
+
+  const fetchFoodLogs = async () => {
+    try {
+      const res = await axios.get(`${API}/foodlogs`);
+      setFoodLogs(res.data);
+    } catch (err) { console.log(err); }
   };
 
   const createUser = async () => {
@@ -32,10 +44,26 @@ function App() {
       setMessage('✅ User created!');
       setName(''); setEmail('');
       fetchUsers();
-    } catch (err) {
-      setMessage('❌ Error: ' + (err.response?.data || err.message));
-    }
+    } catch (err) { setMessage('❌ Error: ' + (err.response?.data || err.message)); }
   };
+
+  const logFood = async () => {
+    if (!selectedUserId) { setMessage('❌ Select a user first!'); return; }
+    try {
+      await axios.post(`${API}/foodlogs`, {
+        userId: parseInt(selectedUserId),
+        foodName, calories: parseFloat(calories),
+        protein: parseFloat(protein),
+        carbs: parseFloat(carbs),
+        fat: parseFloat(fat)
+      });
+      setMessage('✅ Food logged!');
+      setFoodName(''); setCalories(''); setProtein(''); setCarbs(''); setFat('');
+      fetchFoodLogs();
+    } catch (err) { setMessage('❌ Error logging food.'); }
+  };
+
+  const totalCalories = foodLogs.reduce((sum, f) => sum + f.calories, 0);
 
   return (
     <div style={styles.container}>
@@ -43,6 +71,7 @@ function App() {
         <h1 style={styles.logo}>💪 LifeOS Health</h1>
         <span style={styles.navTag}>Full Stack App</span>
       </nav>
+
       <div style={styles.card}>
         <h2 style={styles.cardTitle}>Create Account</h2>
         <input style={styles.input} placeholder="Full Name" value={name} onChange={e => setName(e.target.value)} />
@@ -50,18 +79,50 @@ function App() {
         <button style={styles.button} onClick={createUser}>Create User</button>
         {message && <p style={styles.message}>{message}</p>}
       </div>
+
       <div style={styles.card}>
-        <h2 style={styles.cardTitle}>Registered Users ({users.length})</h2>
-        {users.length === 0 ? <p style={styles.empty}>No users yet.</p> :
-          users.map(u => (
-            <div key={u.id} style={styles.userRow}>
-              <div style={styles.avatar}>{u.name[0]}</div>
+        <h2 style={styles.cardTitle}>Log Food</h2>
+        <select style={styles.input} value={selectedUserId} onChange={e => setSelectedUserId(e.target.value)}>
+          <option value="">Select User</option>
+          {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+        </select>
+        <input style={styles.input} placeholder="Food Name (e.g. Banana)" value={foodName} onChange={e => setFoodName(e.target.value)} />
+        <div style={styles.row}>
+          <input style={styles.halfInput} placeholder="Calories" value={calories} onChange={e => setCalories(e.target.value)} />
+          <input style={styles.halfInput} placeholder="Protein (g)" value={protein} onChange={e => setProtein(e.target.value)} />
+        </div>
+        <div style={styles.row}>
+          <input style={styles.halfInput} placeholder="Carbs (g)" value={carbs} onChange={e => setCarbs(e.target.value)} />
+          <input style={styles.halfInput} placeholder="Fat (g)" value={fat} onChange={e => setFat(e.target.value)} />
+        </div>
+        <button style={styles.button} onClick={logFood}>Log Food</button>
+      </div>
+
+      <div style={styles.card}>
+        <h2 style={styles.cardTitle}>Today's Food Log ({foodLogs.length} items — {totalCalories.toFixed(0)} cal total)</h2>
+        {foodLogs.length === 0 ? <p style={styles.empty}>No food logged yet.</p> :
+          foodLogs.map(f => (
+            <div key={f.id} style={styles.foodRow}>
               <div>
-                <p style={styles.userName}>{u.name}</p>
-                <p style={styles.userEmail}>{u.email}</p>
+                <p style={styles.userName}>{f.foodName}</p>
+                <p style={styles.userEmail}>{f.calories} cal · {f.protein}g protein · {f.carbs}g carbs · {f.fat}g fat</p>
               </div>
+              <span style={styles.calBadge}>{f.calories} cal</span>
             </div>
           ))}
+      </div>
+
+      <div style={styles.card}>
+        <h2 style={styles.cardTitle}>Registered Users ({users.length})</h2>
+        {users.map(u => (
+          <div key={u.id} style={styles.userRow}>
+            <div style={styles.avatar}>{u.name[0]}</div>
+            <div>
+              <p style={styles.userName}>{u.name}</p>
+              <p style={styles.userEmail}>{u.email}</p>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -75,9 +136,13 @@ const styles = {
   card: { background: '#1e293b', borderRadius: '12px', padding: '24px', margin: '24px auto', maxWidth: '500px' },
   cardTitle: { color: '#f1f5f9', marginTop: 0 },
   input: { width: '100%', padding: '12px', marginBottom: '12px', borderRadius: '8px', border: '1px solid #334155', background: '#0f172a', color: '#f1f5f9', fontSize: '15px', boxSizing: 'border-box' },
+  row: { display: 'flex', gap: '12px' },
+  halfInput: { flex: 1, padding: '12px', marginBottom: '12px', borderRadius: '8px', border: '1px solid #334155', background: '#0f172a', color: '#f1f5f9', fontSize: '15px' },
   button: { width: '100%', padding: '12px', background: '#38bdf8', color: '#0f172a', border: 'none', borderRadius: '8px', fontSize: '16px', fontWeight: 'bold', cursor: 'pointer' },
   message: { color: '#38bdf8', textAlign: 'center', marginTop: '12px' },
   empty: { color: '#64748b' },
+  foodRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid #334155' },
+  calBadge: { background: '#0f172a', color: '#38bdf8', padding: '4px 10px', borderRadius: '20px', fontSize: '13px' },
   userRow: { display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 0', borderBottom: '1px solid #334155' },
   avatar: { background: '#38bdf8', color: '#0f172a', borderRadius: '50%', width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: '18px' },
   userName: { color: '#f1f5f9', margin: 0, fontWeight: 'bold' },
