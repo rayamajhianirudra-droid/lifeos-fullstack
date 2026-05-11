@@ -9,12 +9,16 @@ import java.util.List;
 public class FoodLogService {
 
     private final FoodLogRepository foodLogRepository;
+    private final AiInsightService aiInsightService;
 
-    public FoodLogService(FoodLogRepository foodLogRepository) {
+    public FoodLogService(FoodLogRepository foodLogRepository, AiInsightService aiInsightService) {
         this.foodLogRepository = foodLogRepository;
+        this.aiInsightService = aiInsightService;
     }
 
     public FoodLog addFoodLog(FoodLog foodLog) {
+        String insight = aiInsightService.getFoodInsight(foodLog.getFoodName());
+        foodLog.setInsight(insight);
         return foodLogRepository.save(foodLog);
     }
 
