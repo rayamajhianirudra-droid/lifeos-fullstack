@@ -17,9 +17,13 @@ public class FoodLogService {
     }
 
     public FoodLog addFoodLog(FoodLog foodLog) {
-        String insight = aiInsightService.getFoodInsight(foodLog.getFoodName());
-        foodLog.setInsight(insight);
-        return foodLogRepository.save(foodLog);
+        FoodLog saved = foodLogRepository.save(foodLog);
+        new Thread(() -> {
+            String insight = aiInsightService.getFoodInsight(saved.getFoodName());
+            saved.setInsight(insight);
+            foodLogRepository.save(saved);
+        }).start();
+        return saved;
     }
 
     public List<FoodLog> getFoodLogsByUser(Long userId) {

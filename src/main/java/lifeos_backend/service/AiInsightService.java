@@ -5,12 +5,14 @@ import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.http.MediaType;
 import java.util.List;
 import java.util.Map;
+import java.util.HashMap;
 
 @Service
 public class AiInsightService {
 
     private final WebClient webClient;
     private final String apiKey = "AIzaSyDNMcWVNPim5v1_miXom6pjacu9a7ps2EQ";
+    private final HashMap<String, String> cache = new HashMap<>();
 
     public AiInsightService() {
         this.webClient = WebClient.builder()
@@ -19,6 +21,13 @@ public class AiInsightService {
     }
 
     public String getFoodInsight(String foodName) {
+        String key = foodName.toLowerCase().trim();
+
+        if (cache.containsKey(key)) {
+            System.out.println("CACHE HIT: " + key);
+            return cache.get(key);
+        }
+
         try {
             Map<String, Object> body = Map.of(
                     "contents", List.of(
@@ -39,12 +48,15 @@ public class AiInsightService {
             List<Map> candidates = (List<Map>) response.get("candidates");
             Map content = (Map) candidates.get(0).get("content");
             List<Map> parts = (List<Map>) content.get("parts");
-            return (String) parts.get(0).get("text");
+            String insight = (String) parts.get(0).get("text");
+
+            cache.put(key, insight);
+            System.out.println("CACHE STORED: " + key);
+            return insight;
 
         } catch (Exception e) {
             System.out.println("AI ERROR: " + e.getMessage());
             return "A nutritious choice for your health!";
         }
-
     }
 }
