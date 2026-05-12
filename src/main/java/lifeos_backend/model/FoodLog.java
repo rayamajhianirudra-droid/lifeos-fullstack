@@ -1,36 +1,41 @@
-package com.lifeos.lifeos_backend.service;
+package com.lifeos.lifeos_backend.model;
 
-import com.lifeos.lifeos_backend.model.FoodLog;
-import com.lifeos.lifeos_backend.repository.FoodLogRepository;
-import org.springframework.stereotype.Service;
-import java.util.List;
+import jakarta.persistence.*;
+import java.time.LocalDate;
 
-@Service
-public class FoodLogService {
+@Entity
+@Table(name = "food_logs")
+public class FoodLog {
 
-    private final FoodLogRepository foodLogRepository;
-    private final AiInsightService aiInsightService;
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
 
-    public FoodLogService(FoodLogRepository foodLogRepository, AiInsightService aiInsightService) {
-        this.foodLogRepository = foodLogRepository;
-        this.aiInsightService = aiInsightService;
-    }
+    private Long userId;
+    private String foodName;
+    private double calories;
+    private double protein;
+    private double carbs;
+    private double fat;
+    private LocalDate date = LocalDate.now();
+    private String insight;
 
-    public FoodLog addFoodLog(FoodLog foodLog) {
-        String insight = aiInsightService.getFoodInsight(foodLog.getFoodName());
-        foodLog.setInsight(insight);
-        return foodLogRepository.save(foodLog);
-    }
-
-    public List<FoodLog> getFoodLogsByUser(Long userId) {
-        return foodLogRepository.findByUserId(userId);
-    }
-
-    public List<FoodLog> getAllFoodLogs() {
-        return foodLogRepository.findAll();
-    }
-
-    public void deleteFoodLog(Long id) {
-        foodLogRepository.deleteById(id);
-    }
+    public Long getId() { return id; }
+    public void setId(Long id) { this.id = id; }
+    public Long getUserId() { return userId; }
+    public void setUserId(Long userId) { this.userId = userId; }
+    public String getFoodName() { return foodName; }
+    public void setFoodName(String foodName) { this.foodName = foodName; }
+    public double getCalories() { return calories; }
+    public void setCalories(double calories) { this.calories = calories; }
+    public double getProtein() { return protein; }
+    public void setProtein(double protein) { this.protein = protein; }
+    public double getCarbs() { return carbs; }
+    public void setCarbs(double carbs) { this.carbs = carbs; }
+    public double getFat() { return fat; }
+    public void setFat(double fat) { this.fat = fat; }
+    public LocalDate getDate() { return date; }
+    public void setDate(LocalDate date) { this.date = date; }
+    public String getInsight() { return insight; }
+    public void setInsight(String insight) { this.insight = insight; }
 }
