@@ -6,52 +6,60 @@ const API = 'http://localhost:8080/api';
 const USDA_KEY = 'zFZ3LLHNi6jM9uLKavvLVtqFEQvledgKCy0t3xwy';
 
 function App() {
-  const [users, setUsers] = useState([]);
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [message, setMessage] = useState('');
+  const [token, setToken] = useState(localStorage.getItem('token'));
+  const [currentUser, setCurrentUser] = useState(localStorage.getItem('userName'));
+  const [authMode, setAuthMode] = useState('login');
+  const [authEmail, setAuthEmail] = useState('');
+  const [authPassword, setAuthPassword] = useState('');
+  const [authName, setAuthName] = useState('');
+  const [authMessage, setAuthMessage] = useState('');
   const [foodLogs, setFoodLogs] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
-  const [selectedFood, setSelectedFood] = useState(null);
-  const [selectedUserId, setSelectedUserId] = useState('');
   const [searching, setSearching] = useState(false);
+  const [message, setMessage] = useState('');
 
-  useEffect(() => { fetchUsers(); fetchFoodLogs(); }, []);
-
-  const fetchUsers = async () => {
-    try {
-      const res = await axios.get(`${API}/users`);
-      setUsers(res.data);
-    } catch (err) { setMessage('Cannot connect to server.'); }
-  };
+  useEffect(() => { if (token) fetchFoodLogs(); }, [token]);
 
   const fetchFoodLogs = async () => {
     try {
-      const res = await axios.get(`${API}/foodlogs`);
+      const res = await axios.get(`${API}/foodlogs`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
       setFoodLogs(res.data);
     } catch (err) { console.log(err); }
   };
 
-  const createUser = async () => {
+  const handleAuth = async () => {
     try {
-      await axios.post(`${API}/users`, {
-        name, email, password: 'password123',
-        age: 25, weightLbs: 170, heightFeet: 5,
-        heightInches: 10, goal: 'maintain',
-        activity: 'moderate', sex: 'male'
-      });
-      setMessage('✅ User created!');
-      setName(''); setEmail('');
-      fetchUsers();
-    } catch (err) { setMessage('❌ Error: ' + (err.response?.data || err.message)); }
+      const url = authMode === 'login' ? `${API}/auth/login` : `${API}/auth/register`;
+      const body = authMode === 'login'
+        ? { email: authEmail, password: authPassword }
+        : { name: authName, email: authEmail, password: authPassword,
+            age: 25, weightLbs: 170, heightFeet: 5, heightInches: 10,
+            goal: 'maintain', activity: 'moderate', sex: 'male' };
+      const res = await axios.post(url, body);
+      localStorage.setItem('token', res.data.token);
+      localStorage.setItem('userName', res.data.name);
+      setToken(res.data.token);
+      setCurrentUser(res.data.name);
+    } catch (err) {
+      setAuthMessage('❌ ' + (err.response?.data || 'Something went wrong'));
+    }
+  };
+
+  const logout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('userName');
+    setToken(null);
+    setCurrentUser(null);
+    setFoodLogs([]);
   };
 
   const searchFood = async () => {
     if (!searchQuery.trim()) return;
     setSearching(true);
     setSearchResults([]);
-    setSelectedFood(null);
     try {
       const res = await axios.get(
         `https://api.nal.usda.gov/fdc/v1/foods/search?query=${searchQuery}&pageSize=5&api_key=${USDA_KEY}`
@@ -64,124 +72,133 @@ function App() {
         fat: Math.round((f.foodNutrients?.find(n => n.nutrientName === 'Total lipid (fat)')?.value || 0) * 10) / 10,
       }));
       setSearchResults(foods);
-    } catch (err) {
-      setMessage('❌ Food search failed.');
-    }
+    } catch (err) { setMessage('❌ Food search failed.'); }
     setSearching(false);
   };
 
   const logFood = async (food) => {
-    if (!selectedUserId) { setMessage('❌ Select a user first!'); return; }
     try {
       await axios.post(`${API}/foodlogs`, {
-        userId: parseInt(selectedUserId),
-        foodName: food.name,
-        calories: food.calories,
-        protein: food.protein,
-        carbs: food.carbs,
-        fat: food.fat
-      });
+        foodName: food.name, calories: food.calories,
+        protein: food.protein, carbs: food.carbs, fat: food.fat
+      }, { headers: { Authorization: `Bearer ${token}` } });
       setMessage('✅ ' + food.name + ' logged!');
       setSearchQuery('');
       setSearchResults([]);
-      setSelectedFood(null);
       fetchFoodLogs();
       setTimeout(() => fetchFoodLogs(), 4000);
-      setTimeout(() => fetchFoodLogs(), 8000);
     } catch (err) { setMessage('❌ Error logging food.'); }
   };
 
   const totalCalories = foodLogs.reduce((sum, f) => sum + f.calories, 0);
 
+  if (!token) {
+    return (
+      <div style={styles.pageCenter}>
+        <nav style={styles.nav}>
+          <h1 style={styles.logo}>💪 LifeOS Health</h1>
+        </nav>
+        <div style={styles.authWrapper}>
+          <div style={styles.authCard}>
+            <h2 style={styles.cardTitle}>
+              {authMode === 'login' ? 'Welcome Back' : 'Create Account'}
+            </h2>
+            {authMode === 'register' && (
+              <input style={styles.input} placeholder="Full Name"
+                value={authName} onChange={e => setAuthName(e.target.value)} />
+            )}
+            <input style={styles.input} placeholder="Email"
+              value={authEmail} onChange={e => setAuthEmail(e.target.value)} />
+            <input style={styles.input} placeholder="Password" type="password"
+              value={authPassword} onChange={e => setAuthPassword(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleAuth()} />
+            <button style={styles.button} onClick={handleAuth}>
+              {authMode === 'login' ? 'Login' : 'Register'}
+            </button>
+            {authMessage && <p style={styles.message}>{authMessage}</p>}
+            <p style={styles.switchText}>
+              {authMode === 'login' ? "Don't have an account? " : "Already have an account? "}
+              <span style={styles.switchLink}
+                onClick={() => { setAuthMode(authMode === 'login' ? 'register' : 'login'); setAuthMessage(''); }}>
+                {authMode === 'login' ? 'Register' : 'Login'}
+              </span>
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={styles.container}>
       <nav style={styles.nav}>
         <h1 style={styles.logo}>💪 LifeOS Health</h1>
-        <span style={styles.navTag}>Full Stack App</span>
+        <div style={styles.navRight}>
+          <span style={styles.navUser}>👤 {currentUser}</span>
+          <button style={styles.logoutBtn} onClick={logout}>Logout</button>
+        </div>
       </nav>
-
-      <div style={styles.card}>
-        <h2 style={styles.cardTitle}>Create Account</h2>
-        <input style={styles.input} placeholder="Full Name" value={name} onChange={e => setName(e.target.value)} />
-        <input style={styles.input} placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} />
-        <button style={styles.button} onClick={createUser}>Create User</button>
-        {message && <p style={styles.message}>{message}</p>}
-      </div>
-
-      <div style={styles.card}>
-        <h2 style={styles.cardTitle}>Log Food</h2>
-        <select style={styles.input} value={selectedUserId} onChange={e => setSelectedUserId(e.target.value)}>
-          <option value="">Select User</option>
-          {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-        </select>
-        <div style={styles.row}>
-          <input
-            style={styles.searchInput}
-            placeholder="Search food (e.g. Big Mac, Banana, Chicken)"
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && searchFood()}
-          />
-          <button style={styles.searchBtn} onClick={searchFood}>
-            {searching ? '...' : '🔍'}
-          </button>
+      <div style={styles.content}>
+        <div style={styles.card}>
+          <h2 style={styles.cardTitle}>Log Food</h2>
+          <div style={styles.row}>
+            <input style={styles.searchInput}
+              placeholder="Search food (e.g. Big Mac, Banana, Chicken)"
+              value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && searchFood()} />
+            <button style={styles.searchBtn} onClick={searchFood}>
+              {searching ? '...' : '🔍'}
+            </button>
+          </div>
+          {searchResults.length > 0 && (
+            <div style={styles.results}>
+              {searchResults.map((food, i) => (
+                <div key={i} style={styles.resultRow}>
+                  <div style={{flex: 1}}>
+                    <p style={styles.resultName}>{food.name}</p>
+                    <p style={styles.resultMacros}>{food.calories} cal · {food.protein}g protein · {food.carbs}g carbs · {food.fat}g fat</p>
+                  </div>
+                  <button style={styles.logBtn} onClick={() => logFood(food)}>+ Log</button>
+                </div>
+              ))}
+            </div>
+          )}
+          {message && <p style={styles.message}>{message}</p>}
         </div>
 
-        {searchResults.length > 0 && (
-          <div style={styles.results}>
-            {searchResults.map((food, i) => (
-              <div key={i} style={styles.resultRow}>
+        <div style={styles.card}>
+          <h2 style={styles.cardTitle}>Today's Food Log ({foodLogs.length} items — {totalCalories.toFixed(0)} cal total)</h2>
+          {foodLogs.length === 0 ? <p style={styles.empty}>No food logged yet. Search and log your first meal!</p> :
+            foodLogs.map(f => (
+              <div key={f.id} style={styles.foodRow}>
                 <div style={{flex: 1}}>
-                  <p style={styles.resultName}>{food.name}</p>
-                  <p style={styles.resultMacros}>{food.calories} cal · {food.protein}g protein · {food.carbs}g carbs · {food.fat}g fat</p>
+                  <p style={styles.userName}>{f.foodName}</p>
+                  <p style={styles.userEmail}>{f.calories} cal · {f.protein}g protein · {f.carbs}g carbs · {f.fat}g fat</p>
+                  {f.insight && f.insight !== 'A nutritious choice for your health!'
+                    ? <p style={styles.insight}>💡 {f.insight}</p>
+                    : <p style={styles.insightLoading}>⏳ Loading insight...</p>}
                 </div>
-                <button style={styles.logBtn} onClick={() => logFood(food)}>+ Log</button>
+                <span style={styles.calBadge}>{f.calories} cal</span>
               </div>
             ))}
-          </div>
-        )}
-      </div>
-
-      <div style={styles.card}>
-        <h2 style={styles.cardTitle}>Today's Food Log ({foodLogs.length} items — {totalCalories.toFixed(0)} cal total)</h2>
-        {foodLogs.length === 0 ? <p style={styles.empty}>No food logged yet. Search and log your first meal!</p> :
-          foodLogs.map(f => (
-            <div key={f.id} style={styles.foodRow}>
-              <div style={{flex: 1}}>
-                <p style={styles.userName}>{f.foodName}</p>
-                <p style={styles.userEmail}>{f.calories} cal · {f.protein}g protein · {f.carbs}g carbs · {f.fat}g fat</p>
-                {f.insight && f.insight !== 'A nutritious choice for your health!'
-                  ? <p style={styles.insight}>💡 {f.insight}</p>
-                  : <p style={styles.insightLoading}>⏳ Loading insight...</p>
-                }
-              </div>
-              <span style={styles.calBadge}>{f.calories} cal</span>
-            </div>
-          ))}
-      </div>
-
-      <div style={styles.card}>
-        <h2 style={styles.cardTitle}>Registered Users ({users.length})</h2>
-        {users.map(u => (
-          <div key={u.id} style={styles.userRow}>
-            <div style={styles.avatar}>{u.name[0]}</div>
-            <div>
-              <p style={styles.userName}>{u.name}</p>
-              <p style={styles.userEmail}>{u.email}</p>
-            </div>
-          </div>
-        ))}
+        </div>
       </div>
     </div>
   );
 }
 
 const styles = {
-  container: { fontFamily: 'Segoe UI, sans-serif', background: '#0f172a', minHeight: '100vh', padding: '0 0 40px' },
-  nav: { background: '#1e293b', padding: '16px 32px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' },
+  container: { fontFamily: 'Segoe UI, sans-serif', background: '#0f172a', minHeight: '100vh', width: '100%' },
+  pageCenter: { fontFamily: 'Segoe UI, sans-serif', background: '#0f172a', minHeight: '100vh', display: 'flex', flexDirection: 'column', width: '100%' },
+  nav: { background: '#1e293b', padding: '16px 32px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', boxSizing: 'border-box' },
   logo: { color: '#38bdf8', margin: 0, fontSize: '24px' },
-  navTag: { color: '#64748b', fontSize: '13px' },
-  card: { background: '#1e293b', borderRadius: '12px', padding: '24px', margin: '24px auto', maxWidth: '500px' },
+  navRight: { display: 'flex', alignItems: 'center', gap: '16px' },
+  navUser: { color: '#f1f5f9', fontSize: '14px' },
+  logoutBtn: { background: 'transparent', border: '1px solid #334155', color: '#64748b', padding: '6px 14px', borderRadius: '6px', cursor: 'pointer', fontSize: '13px' },
+  content: { maxWidth: '560px', margin: '0 auto', padding: '0 16px 40px', width: '100%' },
+  authWrapper: { flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px 16px', width: '100%', boxSizing: 'border-box' },
+  authCard: { background: '#1e293b', borderRadius: '12px', padding: '32px', width: '100%', maxWidth: '400px' },
+  card: { background: '#1e293b', borderRadius: '12px', padding: '24px', marginTop: '24px', width: '100%' },
   cardTitle: { color: '#f1f5f9', marginTop: 0 },
   input: { width: '100%', padding: '12px', marginBottom: '12px', borderRadius: '8px', border: '1px solid #334155', background: '#0f172a', color: '#f1f5f9', fontSize: '15px', boxSizing: 'border-box' },
   row: { display: 'flex', gap: '8px', marginBottom: '8px' },
@@ -199,10 +216,10 @@ const styles = {
   calBadge: { background: '#0f172a', color: '#38bdf8', padding: '4px 10px', borderRadius: '20px', fontSize: '13px', marginLeft: '8px', whiteSpace: 'nowrap' },
   insight: { color: '#38bdf8', margin: '4px 0 0', fontSize: '13px', fontStyle: 'italic' },
   insightLoading: { color: '#64748b', margin: '4px 0 0', fontSize: '13px', fontStyle: 'italic' },
-  userRow: { display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 0', borderBottom: '1px solid #334155' },
-  avatar: { background: '#38bdf8', color: '#0f172a', borderRadius: '50%', width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: '18px' },
   userName: { color: '#f1f5f9', margin: 0, fontWeight: 'bold' },
   userEmail: { color: '#64748b', margin: 0, fontSize: '13px' },
+  switchText: { color: '#64748b', textAlign: 'center', marginTop: '16px', fontSize: '14px' },
+  switchLink: { color: '#38bdf8', cursor: 'pointer', fontWeight: 'bold' },
 };
 
 export default App;
