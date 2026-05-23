@@ -233,9 +233,11 @@ body {
 
 /* MAIN CONTENT */
 .main-content {
-  max-width: 600px;
+  max-width: 700px;
+  width: 100%;
   margin: 0 auto;
-  padding: 24px 16px;
+  padding: 24px 20px;
+  box-sizing: border-box;
 }
 
 .tab-content {
@@ -290,6 +292,7 @@ body {
   align-items: center;
   gap: 20px;
   flex: 1;
+  flex-wrap: wrap;
 }
 
 .cal-stat {
@@ -486,6 +489,7 @@ body {
   align-items: flex-start;
   padding: 12px 0;
   border-bottom: 1px solid #1a2744;
+  gap: 12px;
 }
 
 .food-item:last-child {
@@ -494,6 +498,7 @@ body {
 
 .food-item-left {
   flex: 1;
+  min-width: 0;
 }
 
 .food-item-name {
@@ -501,6 +506,7 @@ body {
   font-weight: 600;
   color: #e2e8f0;
   margin-bottom: 2px;
+  word-break: break-word;
 }
 
 .food-item-macros {
@@ -529,7 +535,6 @@ body {
   font-size: 13px;
   font-weight: 600;
   white-space: nowrap;
-  margin-left: 12px;
 }
 
 /* LOG FOOD TAB */
@@ -624,6 +629,7 @@ body {
 
 .result-left {
   flex: 1;
+  min-width: 0;
 }
 
 .result-name {
@@ -631,6 +637,7 @@ body {
   font-weight: 600;
   color: #e2e8f0;
   margin-bottom: 3px;
+  word-break: break-word;
 }
 
 .result-macros {
@@ -783,5 +790,8 @@ body {
   }
   .tabbar {
     display: none;
+  }
+  .macro-row {
+    grid-template-columns: 1fr;
   }
 }

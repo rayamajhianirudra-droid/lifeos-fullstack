@@ -22,6 +22,7 @@ function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [water, setWater] = useState(0);
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { if (token) fetchFoodLogs(); }, [token]);
 
   const fetchFoodLogs = async () => {
@@ -94,6 +95,15 @@ function App() {
     } catch (err) { setMessage('❌ Error logging food.'); }
   };
 
+  const deleteFood = async (id) => {
+    try {
+      await axios.delete(`${API}/foodlogs/${id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      fetchFoodLogs();
+    } catch (err) { setMessage('❌ Error deleting food.'); }
+  };
+
   const totalCalories = foodLogs.reduce((sum, f) => sum + f.calories, 0);
   const totalProtein = foodLogs.reduce((sum, f) => sum + f.protein, 0);
   const totalCarbs = foodLogs.reduce((sum, f) => sum + f.carbs, 0);
@@ -156,7 +166,6 @@ function App() {
 
   return (
     <div className="app">
-      {/* Top Nav */}
       <nav className="topnav">
         <div className="topnav-left">
           <span className="topnav-logo">💪 LifeOS</span>
@@ -167,7 +176,6 @@ function App() {
         </div>
       </nav>
 
-      {/* Tab Bar */}
       <div className="tabbar">
         {['dashboard', 'log', 'progress'].map(tab => (
           <button key={tab} className={`tab ${activeTab === tab ? 'tab-active' : ''}`}
@@ -179,15 +187,12 @@ function App() {
 
       <div className="main-content">
 
-        {/* DASHBOARD TAB */}
         {activeTab === 'dashboard' && (
           <div className="tab-content">
-
-            {/* Calorie Ring */}
             <div className="calorie-card">
               <div className="calorie-ring-wrapper">
                 <svg width="130" height="130" viewBox="0 0 130 130">
-                  <circle cx="65" cy="65" r="54" fill="none" stroke="#1e293b" strokeWidth="12"/>
+                  <circle cx="65" cy="65" r="54" fill="none" stroke="#1a2744" strokeWidth="12"/>
                   <circle cx="65" cy="65" r="54" fill="none" stroke="#38bdf8" strokeWidth="12"
                     strokeDasharray={circumference}
                     strokeDashoffset={strokeDash}
@@ -218,7 +223,6 @@ function App() {
               </div>
             </div>
 
-            {/* Macro Cards */}
             <div className="macro-row">
               {[
                 { label: 'Protein', val: totalProtein, goal: 150, color: '#38bdf8', unit: 'g' },
@@ -241,7 +245,6 @@ function App() {
               ))}
             </div>
 
-            {/* Water Tracker */}
             <div className="water-card">
               <div className="water-header">
                 <span>💧 Water Intake</span>
@@ -255,7 +258,6 @@ function App() {
               </div>
             </div>
 
-            {/* Today's Food Log */}
             <div className="foodlog-card">
               <div className="foodlog-header">
                 <h3>Today's Food Log</h3>
@@ -277,7 +279,10 @@ function App() {
                         ? <p className="food-insight">💡 {f.insight}</p>
                         : <p className="food-insight-loading">⏳ Loading insight...</p>}
                     </div>
-                    <span className="food-item-cal">{f.calories} cal</span>
+                    <div style={{display:'flex', alignItems:'center', gap:'8px', flexShrink:0}}>
+                      <span className="food-item-cal">{f.calories} cal</span>
+                      <button onClick={() => deleteFood(f.id)} style={{background:'transparent', border:'none', color:'#ef4444', cursor:'pointer', fontSize:'18px', padding:'4px'}}>🗑️</button>
+                    </div>
                   </div>
                 ))
               )}
@@ -285,7 +290,6 @@ function App() {
           </div>
         )}
 
-        {/* LOG FOOD TAB */}
         {activeTab === 'log' && (
           <div className="tab-content">
             <div className="log-card">
@@ -317,7 +321,6 @@ function App() {
           </div>
         )}
 
-        {/* PROGRESS TAB */}
         {activeTab === 'progress' && (
           <div className="tab-content">
             <div className="progress-card">
@@ -384,7 +387,6 @@ function App() {
         )}
       </div>
 
-      {/* Bottom Nav (mobile) */}
       <div className="bottomnav">
         {[
           { id: 'dashboard', icon: '🏠', label: 'Home' },
