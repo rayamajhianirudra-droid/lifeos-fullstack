@@ -4,7 +4,6 @@ import './App.css';
 
 const API = 'http://localhost:8080/api';
 const USDA_KEY = 'zFZ3LLHNi6jM9uLKavvLVtqFEQvledgKCy0t3xwy';
-const DAILY_GOAL = 2000;
 
 function App() {
   const [token, setToken] = useState(localStorage.getItem('token'));
@@ -21,6 +20,34 @@ function App() {
   const [message, setMessage] = useState('');
   const [activeTab, setActiveTab] = useState('dashboard');
   const [water, setWater] = useState(0);
+
+  // Profile state
+  const [profile, setProfile] = useState(() => {
+    const saved = localStorage.getItem('profile');
+    return saved ? JSON.parse(saved) : {
+      age: 25, weightLbs: 170, heightFeet: 5, heightInches: 10,
+      sex: 'male', activity: 'moderate', goal: 'maintain'
+    };
+  });
+  const [profileSaved, setProfileSaved] = useState(false);
+
+  // BMR/TDEE Calculator
+  const calculateDailyGoal = (p) => {
+    const weightKg = p.weightLbs * 0.453592;
+    const heightCm = (p.heightFeet * 30.48) + (p.heightInches * 2.54);
+    let bmr = p.sex === 'male'
+      ? 10 * weightKg + 6.25 * heightCm - 5 * p.age + 5
+      : 10 * weightKg + 6.25 * heightCm - 5 * p.age - 161;
+    const activityMultipliers = {
+      sedentary: 1.2, light: 1.375, moderate: 1.55, active: 1.725, veryactive: 1.9
+    };
+    let tdee = bmr * (activityMultipliers[p.activity] || 1.55);
+    if (p.goal === 'lose') tdee -= 500;
+    if (p.goal === 'gain') tdee += 500;
+    return Math.round(tdee);
+  };
+
+  const dailyGoal = calculateDailyGoal(profile);
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { if (token) fetchFoodLogs(); }, [token]);
@@ -40,8 +67,9 @@ function App() {
       const body = authMode === 'login'
         ? { email: authEmail, password: authPassword }
         : { name: authName, email: authEmail, password: authPassword,
-            age: 25, weightLbs: 170, heightFeet: 5, heightInches: 10,
-            goal: 'maintain', activity: 'moderate', sex: 'male' };
+            age: profile.age, weightLbs: profile.weightLbs,
+            heightFeet: profile.heightFeet, heightInches: profile.heightInches,
+            goal: profile.goal, activity: profile.activity, sex: profile.sex };
       const res = await axios.post(url, body);
       localStorage.setItem('token', res.data.token);
       localStorage.setItem('userName', res.data.name);
@@ -58,6 +86,12 @@ function App() {
     setToken(null);
     setCurrentUser(null);
     setFoodLogs([]);
+  };
+
+  const saveProfile = () => {
+    localStorage.setItem('profile', JSON.stringify(profile));
+    setProfileSaved(true);
+    setTimeout(() => setProfileSaved(false), 2000);
   };
 
   const searchFood = async () => {
@@ -108,8 +142,8 @@ function App() {
   const totalProtein = foodLogs.reduce((sum, f) => sum + f.protein, 0);
   const totalCarbs = foodLogs.reduce((sum, f) => sum + f.carbs, 0);
   const totalFat = foodLogs.reduce((sum, f) => sum + f.fat, 0);
-  const caloriePercent = Math.min((totalCalories / DAILY_GOAL) * 100, 100);
-  const remaining = Math.max(DAILY_GOAL - totalCalories, 0);
+  const caloriePercent = Math.min((totalCalories / dailyGoal) * 100, 100);
+  const remaining = Math.max(dailyGoal - totalCalories, 0);
 
   const circumference = 2 * Math.PI * 54;
   const strokeDash = circumference - (caloriePercent / 100) * circumference;
@@ -177,16 +211,19 @@ function App() {
       </nav>
 
       <div className="tabbar">
-        {['dashboard', 'log', 'progress'].map(tab => (
+        {['dashboard', 'log', 'progress', 'profile'].map(tab => (
           <button key={tab} className={`tab ${activeTab === tab ? 'tab-active' : ''}`}
             onClick={() => setActiveTab(tab)}>
-            {tab === 'dashboard' ? '🏠 Dashboard' : tab === 'log' ? '🍽️ Log Food' : '📊 Progress'}
+            {tab === 'dashboard' ? '🏠 Dashboard' :
+             tab === 'log' ? '🍽️ Log Food' :
+             tab === 'progress' ? '📊 Progress' : '👤 Profile'}
           </button>
         ))}
       </div>
 
       <div className="main-content">
 
+        {/* DASHBOARD TAB */}
         {activeTab === 'dashboard' && (
           <div className="tab-content">
             <div className="calorie-card">
@@ -207,7 +244,7 @@ function App() {
               </div>
               <div className="calorie-stats">
                 <div className="cal-stat">
-                  <span className="cal-stat-val">{DAILY_GOAL}</span>
+                  <span className="cal-stat-val">{dailyGoal}</span>
                   <span className="cal-stat-label">Goal</span>
                 </div>
                 <div className="cal-stat-divider"/>
@@ -225,9 +262,9 @@ function App() {
 
             <div className="macro-row">
               {[
-                { label: 'Protein', val: totalProtein, goal: 150, color: '#38bdf8', unit: 'g' },
-                { label: 'Carbs', val: totalCarbs, goal: 250, color: '#a78bfa', unit: 'g' },
-                { label: 'Fat', val: totalFat, goal: 65, color: '#fb923c', unit: 'g' },
+                { label: 'Protein', val: totalProtein, goal: Math.round(dailyGoal * 0.3 / 4), color: '#38bdf8', unit: 'g' },
+                { label: 'Carbs', val: totalCarbs, goal: Math.round(dailyGoal * 0.45 / 4), color: '#a78bfa', unit: 'g' },
+                { label: 'Fat', val: totalFat, goal: Math.round(dailyGoal * 0.25 / 9), color: '#fb923c', unit: 'g' },
               ].map(m => (
                 <div key={m.label} className="macro-card">
                   <div className="macro-top">
@@ -290,6 +327,7 @@ function App() {
           </div>
         )}
 
+        {/* LOG FOOD TAB */}
         {activeTab === 'log' && (
           <div className="tab-content">
             <div className="log-card">
@@ -321,10 +359,11 @@ function App() {
           </div>
         )}
 
+        {/* PROGRESS TAB */}
         {activeTab === 'progress' && (
           <div className="tab-content">
             <div className="progress-card">
-              <h3>Weekly Summary</h3>
+              <h3>Today's Summary</h3>
               <div className="progress-stats">
                 <div className="progress-stat">
                   <span className="progress-stat-num">{foodLogs.length}</span>
@@ -332,7 +371,7 @@ function App() {
                 </div>
                 <div className="progress-stat">
                   <span className="progress-stat-num">{totalCalories}</span>
-                  <span className="progress-stat-label">Total Calories</span>
+                  <span className="progress-stat-label">Calories Eaten</span>
                 </div>
                 <div className="progress-stat">
                   <span className="progress-stat-num">{Math.round(totalProtein)}g</span>
@@ -345,43 +384,118 @@ function App() {
               </div>
             </div>
             <div className="progress-card">
-              <h3>Calorie Goal Progress</h3>
-              <div className="progress-bar-section">
-                <div className="progress-bar-label">
-                  <span>Today</span>
-                  <span>{totalCalories} / {DAILY_GOAL} cal</span>
+              <h3>Goal Progress</h3>
+              {[
+                { label: 'Calories', val: totalCalories, goal: dailyGoal, color: '#38bdf8', unit: 'cal' },
+                { label: 'Protein', val: Math.round(totalProtein), goal: Math.round(dailyGoal * 0.3 / 4), color: '#38bdf8', unit: 'g' },
+                { label: 'Carbs', val: Math.round(totalCarbs), goal: Math.round(dailyGoal * 0.45 / 4), color: '#a78bfa', unit: 'g' },
+                { label: 'Fat', val: Math.round(totalFat), goal: Math.round(dailyGoal * 0.25 / 9), color: '#fb923c', unit: 'g' },
+              ].map(item => (
+                <div key={item.label} className="progress-bar-section">
+                  <div className="progress-bar-label">
+                    <span>{item.label}</span>
+                    <span>{item.val} / {item.goal}{item.unit}</span>
+                  </div>
+                  <div className="progress-bar-bg">
+                    <div className="progress-bar-fill" style={{
+                      width: `${Math.min((item.val / item.goal) * 100, 100)}%`,
+                      background: item.color
+                    }}/>
+                  </div>
                 </div>
-                <div className="progress-bar-bg">
-                  <div className="progress-bar-fill" style={{width: `${caloriePercent}%`}}/>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* PROFILE TAB */}
+        {activeTab === 'profile' && (
+          <div className="tab-content">
+            <div className="profile-card">
+              <h3 className="profile-title">👤 My Profile</h3>
+              <p className="profile-sub">Your stats power your personalized calorie goal</p>
+
+              <div className="profile-goal-banner">
+                <span className="profile-goal-label">Your Daily Calorie Goal</span>
+                <span className="profile-goal-num">{dailyGoal} cal</span>
+                <span className="profile-goal-sub">
+                  {profile.goal === 'lose' ? '🔥 Weight Loss' :
+                   profile.goal === 'gain' ? '💪 Muscle Gain' : '⚖️ Maintain Weight'}
+                </span>
+              </div>
+
+              <div className="profile-grid">
+                <div className="profile-field">
+                  <label>Age</label>
+                  <input type="number" className="profile-input" value={profile.age}
+                    onChange={e => setProfile({...profile, age: parseInt(e.target.value) || 0})} />
+                </div>
+                <div className="profile-field">
+                  <label>Weight (lbs)</label>
+                  <input type="number" className="profile-input" value={profile.weightLbs}
+                    onChange={e => setProfile({...profile, weightLbs: parseInt(e.target.value) || 0})} />
+                </div>
+                <div className="profile-field">
+                  <label>Height (feet)</label>
+                  <input type="number" className="profile-input" value={profile.heightFeet}
+                    onChange={e => setProfile({...profile, heightFeet: parseInt(e.target.value) || 0})} />
+                </div>
+                <div className="profile-field">
+                  <label>Height (inches)</label>
+                  <input type="number" className="profile-input" value={profile.heightInches}
+                    onChange={e => setProfile({...profile, heightInches: parseInt(e.target.value) || 0})} />
                 </div>
               </div>
-              <div className="progress-bar-section">
-                <div className="progress-bar-label">
-                  <span>Protein</span>
-                  <span>{Math.round(totalProtein)} / 150g</span>
-                </div>
-                <div className="progress-bar-bg">
-                  <div className="progress-bar-fill" style={{width: `${Math.min((totalProtein/150)*100,100)}%`, background: '#38bdf8'}}/>
-                </div>
-              </div>
-              <div className="progress-bar-section">
-                <div className="progress-bar-label">
-                  <span>Carbs</span>
-                  <span>{Math.round(totalCarbs)} / 250g</span>
-                </div>
-                <div className="progress-bar-bg">
-                  <div className="progress-bar-fill" style={{width: `${Math.min((totalCarbs/250)*100,100)}%`, background: '#a78bfa'}}/>
+
+              <div className="profile-field-full">
+                <label>Sex</label>
+                <div className="profile-options">
+                  {['male', 'female'].map(s => (
+                    <button key={s} className={`profile-option ${profile.sex === s ? 'profile-option-active' : ''}`}
+                      onClick={() => setProfile({...profile, sex: s})}>
+                      {s === 'male' ? '♂ Male' : '♀ Female'}
+                    </button>
+                  ))}
                 </div>
               </div>
-              <div className="progress-bar-section">
-                <div className="progress-bar-label">
-                  <span>Fat</span>
-                  <span>{Math.round(totalFat)} / 65g</span>
-                </div>
-                <div className="progress-bar-bg">
-                  <div className="progress-bar-fill" style={{width: `${Math.min((totalFat/65)*100,100)}%`, background: '#fb923c'}}/>
+
+              <div className="profile-field-full">
+                <label>Activity Level</label>
+                <div className="profile-options">
+                  {[
+                    { val: 'sedentary', label: '🪑 Sedentary' },
+                    { val: 'light', label: '🚶 Light' },
+                    { val: 'moderate', label: '🏃 Moderate' },
+                    { val: 'active', label: '⚡ Active' },
+                    { val: 'veryactive', label: '🔥 Very Active' },
+                  ].map(a => (
+                    <button key={a.val} className={`profile-option ${profile.activity === a.val ? 'profile-option-active' : ''}`}
+                      onClick={() => setProfile({...profile, activity: a.val})}>
+                      {a.label}
+                    </button>
+                  ))}
                 </div>
               </div>
+
+              <div className="profile-field-full">
+                <label>Goal</label>
+                <div className="profile-options">
+                  {[
+                    { val: 'lose', label: '🔥 Lose Weight' },
+                    { val: 'maintain', label: '⚖️ Maintain' },
+                    { val: 'gain', label: '💪 Gain Muscle' },
+                  ].map(g => (
+                    <button key={g.val} className={`profile-option ${profile.goal === g.val ? 'profile-option-active' : ''}`}
+                      onClick={() => setProfile({...profile, goal: g.val})}>
+                      {g.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <button className="profile-save-btn" onClick={saveProfile}>
+                {profileSaved ? '✅ Saved!' : 'Save Profile'}
+              </button>
             </div>
           </div>
         )}
@@ -392,6 +506,7 @@ function App() {
           { id: 'dashboard', icon: '🏠', label: 'Home' },
           { id: 'log', icon: '🍽️', label: 'Log' },
           { id: 'progress', icon: '📊', label: 'Progress' },
+          { id: 'profile', icon: '👤', label: 'Profile' },
         ].map(item => (
           <button key={item.id} className={`bottomnav-btn ${activeTab === item.id ? 'bottomnav-active' : ''}`}
             onClick={() => setActiveTab(item.id)}>
