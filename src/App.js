@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import './App.css';
-
+ 
 const API = 'http://localhost:8080/api';
 const USDA_KEY = 'zFZ3LLHNi6jM9uLKavvLVtqFEQvledgKCy0t3xwy';
-
+ 
 function App() {
   const [token, setToken] = useState(localStorage.getItem('token'));
   const [currentUser, setCurrentUser] = useState(localStorage.getItem('userName'));
@@ -21,7 +21,11 @@ function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [water, setWater] = useState(0);
   const [mealType, setMealType] = useState('breakfast');
-
+  const [resetToken, setResetToken] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [resetMessage, setResetMessage] = useState('');
+  const [resetStep, setResetStep] = useState(1);
+ 
   const [profile, setProfile] = useState(() => {
     const saved = localStorage.getItem('profile');
     return saved ? JSON.parse(saved) : {
@@ -30,7 +34,7 @@ function App() {
     };
   });
   const [profileSaved, setProfileSaved] = useState(false);
-
+ 
   const calculateDailyGoal = (p) => {
     const weightKg = p.weightLbs * 0.453592;
     const heightCm = (p.heightFeet * 30.48) + (p.heightInches * 2.54);
@@ -45,12 +49,12 @@ function App() {
     if (p.goal === 'gain') tdee += 500;
     return Math.round(tdee);
   };
-
+ 
   const dailyGoal = calculateDailyGoal(profile);
-
+ 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { if (token) fetchFoodLogs(); }, [token]);
-
+ 
   const fetchFoodLogs = async () => {
     try {
       const res = await axios.get(`${API}/foodlogs`, {
@@ -59,7 +63,7 @@ function App() {
       setFoodLogs(res.data);
     } catch (err) { console.log(err); }
   };
-
+ 
   const handleAuth = async () => {
     try {
       const url = authMode === 'login' ? `${API}/auth/login` : `${API}/auth/register`;
@@ -78,7 +82,40 @@ function App() {
       setAuthMessage('❌ ' + (err.response?.data || 'Something went wrong'));
     }
   };
-
+ 
+  const handleForgotPassword = async () => {
+    try {
+      await axios.post(`${API}/auth/forgot-password`, { email: authEmail });
+      setResetMessage('✅ Reset token sent to your email!');
+      setResetStep(2);
+    } catch (err) {
+      setResetMessage('❌ Something went wrong. Try again.');
+    }
+  };
+ 
+  const handleResetPassword = async () => {
+    if (!resetToken || !newPassword) {
+      setResetMessage('❌ Please enter both token and new password.');
+      return;
+    }
+    try {
+      const res = await axios.post(`${API}/auth/reset-password`, {
+        token: resetToken,
+        newPassword: newPassword
+      });
+      setResetMessage('✅ ' + res.data + ' You can now sign in!');
+      setTimeout(() => {
+        setAuthMode('login');
+        setResetStep(1);
+        setResetToken('');
+        setNewPassword('');
+        setResetMessage('');
+      }, 2000);
+    } catch (err) {
+      setResetMessage('❌ Invalid or expired token.');
+    }
+  };
+ 
   const logout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('userName');
@@ -86,13 +123,13 @@ function App() {
     setCurrentUser(null);
     setFoodLogs([]);
   };
-
+ 
   const saveProfile = () => {
     localStorage.setItem('profile', JSON.stringify(profile));
     setProfileSaved(true);
     setTimeout(() => setProfileSaved(false), 2000);
   };
-
+ 
   const searchFood = async () => {
     if (!searchQuery.trim()) return;
     setSearching(true);
@@ -112,7 +149,7 @@ function App() {
     } catch (err) { setMessage('❌ Food search failed.'); }
     setSearching(false);
   };
-
+ 
   const logFood = async (food) => {
     try {
       await axios.post(`${API}/foodlogs`, {
@@ -128,7 +165,7 @@ function App() {
       setTimeout(() => setMessage(''), 3000);
     } catch (err) { setMessage('❌ Error logging food.'); }
   };
-
+ 
   const deleteFood = async (id) => {
     try {
       await axios.delete(`${API}/foodlogs/${id}`, {
@@ -137,24 +174,24 @@ function App() {
       fetchFoodLogs();
     } catch (err) { setMessage('❌ Error deleting food.'); }
   };
-
+ 
   const totalCalories = foodLogs.reduce((sum, f) => sum + f.calories, 0);
   const totalProtein = Math.round(foodLogs.reduce((sum, f) => sum + f.protein, 0) * 10) / 10;
   const totalCarbs = Math.round(foodLogs.reduce((sum, f) => sum + f.carbs, 0) * 10) / 10;
   const totalFat = Math.round(foodLogs.reduce((sum, f) => sum + f.fat, 0) * 10) / 10;
   const caloriePercent = Math.min((totalCalories / dailyGoal) * 100, 100);
   const remaining = Math.max(dailyGoal - totalCalories, 0);
-
+ 
   const circumference = 2 * Math.PI * 54;
   const strokeDash = circumference - (caloriePercent / 100) * circumference;
-
+ 
   const mealCategories = [
     { key: 'breakfast', label: '🌅 Breakfast' },
     { key: 'lunch', label: '☀️ Lunch' },
     { key: 'dinner', label: '🌙 Dinner' },
     { key: 'snack', label: '🍎 Snack' },
   ];
-
+ 
   if (!token) {
     return (
       <div className="auth-page">
@@ -165,46 +202,104 @@ function App() {
             <p className="auth-logo-sub">Your personal nutrition intelligence</p>
           </div>
           <div className="auth-card">
-            <h2 className="auth-title">
-              {authMode === 'login' ? 'Welcome back' : 'Create account'}
-            </h2>
-            <p className="auth-subtitle">
-              {authMode === 'login' ? 'Sign in to continue your journey' : 'Start tracking your nutrition today'}
-            </p>
-            {authMode === 'register' && (
-              <div className="input-group">
-                <label>Full Name</label>
-                <input className="auth-input" placeholder="Anirudra Rayamajhi"
-                  value={authName} onChange={e => setAuthName(e.target.value)} />
-              </div>
+ 
+            {/* FORGOT PASSWORD MODE */}
+            {authMode === 'forgot' && (
+              <>
+                <h2 className="auth-title">Reset Password</h2>
+                <p className="auth-subtitle">
+                  {resetStep === 1 ? "Enter your email to receive a reset token" : "Enter the token from your email"}
+                </p>
+ 
+                {resetStep === 1 && (
+                  <>
+                    <div className="input-group">
+                      <label>Email</label>
+                      <input className="auth-input" placeholder="you@example.com"
+                        value={authEmail} onChange={e => setAuthEmail(e.target.value)} />
+                    </div>
+                    {resetMessage && <p className={resetMessage.startsWith('✅') ? 'auth-success' : 'auth-error'}>{resetMessage}</p>}
+                    <button className="auth-btn" onClick={handleForgotPassword}>
+                      Send Reset Token
+                    </button>
+                  </>
+                )}
+ 
+                {resetStep === 2 && (
+                  <>
+                    <div className="input-group">
+                      <label>Reset Token (from email)</label>
+                      <input className="auth-input" placeholder="Paste token here"
+                        value={resetToken} onChange={e => setResetToken(e.target.value)} />
+                    </div>
+                    <div className="input-group">
+                      <label>New Password</label>
+                      <input className="auth-input" placeholder="••••••••" type="password"
+                        value={newPassword} onChange={e => setNewPassword(e.target.value)} />
+                    </div>
+                    {resetMessage && <p className={resetMessage.startsWith('✅') ? 'auth-success' : 'auth-error'}>{resetMessage}</p>}
+                    <button className="auth-btn" onClick={handleResetPassword}>
+                      Reset Password
+                    </button>
+                  </>
+                )}
+ 
+                <p className="auth-switch">
+                  Remember your password? <span onClick={() => { setAuthMode('login'); setResetStep(1); setResetMessage(''); }}>Sign In</span>
+                </p>
+              </>
             )}
-            <div className="input-group">
-              <label>Email</label>
-              <input className="auth-input" placeholder="you@example.com"
-                value={authEmail} onChange={e => setAuthEmail(e.target.value)} />
-            </div>
-            <div className="input-group">
-              <label>Password</label>
-              <input className="auth-input" placeholder="••••••••" type="password"
-                value={authPassword} onChange={e => setAuthPassword(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleAuth()} />
-            </div>
-            {authMessage && <p className="auth-error">{authMessage}</p>}
-            <button className="auth-btn" onClick={handleAuth}>
-              {authMode === 'login' ? 'Sign In' : 'Create Account'}
-            </button>
-            <p className="auth-switch">
-              {authMode === 'login' ? "Don't have an account? " : "Already have an account? "}
-              <span onClick={() => { setAuthMode(authMode === 'login' ? 'register' : 'login'); setAuthMessage(''); }}>
-                {authMode === 'login' ? 'Sign Up' : 'Sign In'}
-              </span>
-            </p>
+ 
+            {/* LOGIN / REGISTER MODE */}
+            {authMode !== 'forgot' && (
+              <>
+                <h2 className="auth-title">
+                  {authMode === 'login' ? 'Welcome back' : 'Create account'}
+                </h2>
+                <p className="auth-subtitle">
+                  {authMode === 'login' ? 'Sign in to continue your journey' : 'Start tracking your nutrition today'}
+                </p>
+                {authMode === 'register' && (
+                  <div className="input-group">
+                    <label>Full Name</label>
+                    <input className="auth-input" placeholder="Anirudra Rayamajhi"
+                      value={authName} onChange={e => setAuthName(e.target.value)} />
+                  </div>
+                )}
+                <div className="input-group">
+                  <label>Email</label>
+                  <input className="auth-input" placeholder="you@example.com"
+                    value={authEmail} onChange={e => setAuthEmail(e.target.value)} />
+                </div>
+                <div className="input-group">
+                  <label>Password</label>
+                  <input className="auth-input" placeholder="••••••••" type="password"
+                    value={authPassword} onChange={e => setAuthPassword(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && handleAuth()} />
+                </div>
+                {authMessage && <p className="auth-error">{authMessage}</p>}
+                <button className="auth-btn" onClick={handleAuth}>
+                  {authMode === 'login' ? 'Sign In' : 'Create Account'}
+                </button>
+                {authMode === 'login' && (
+                  <p className="forgot-link" onClick={() => { setAuthMode('forgot'); setResetMessage(''); setResetStep(1); }}>
+                    Forgot Password?
+                  </p>
+                )}
+                <p className="auth-switch">
+                  {authMode === 'login' ? "Don't have an account? " : "Already have an account? "}
+                  <span onClick={() => { setAuthMode(authMode === 'login' ? 'register' : 'login'); setAuthMessage(''); }}>
+                    {authMode === 'login' ? 'Sign Up' : 'Sign In'}
+                  </span>
+                </p>
+              </>
+            )}
           </div>
         </div>
       </div>
     );
   }
-
+ 
   return (
     <div className="app">
       <nav className="topnav">
@@ -216,7 +311,7 @@ function App() {
           <button className="topnav-logout" onClick={logout}>Sign Out</button>
         </div>
       </nav>
-
+ 
       <div className="tabbar">
         {['dashboard', 'log', 'progress', 'profile'].map(tab => (
           <button key={tab} className={`tab ${activeTab === tab ? 'tab-active' : ''}`}
@@ -227,9 +322,9 @@ function App() {
           </button>
         ))}
       </div>
-
+ 
       <div className="main-content">
-
+ 
         {activeTab === 'dashboard' && (
           <div className="tab-content">
             <div className="calorie-card">
@@ -265,7 +360,7 @@ function App() {
                 </div>
               </div>
             </div>
-
+ 
             <div className="macro-row">
               {[
                 { label: 'Protein', val: totalProtein, goal: Math.round(dailyGoal * 0.3 / 4), color: '#38bdf8', unit: 'g' },
@@ -287,7 +382,7 @@ function App() {
                 </div>
               ))}
             </div>
-
+ 
             <div className="water-card">
               <div className="water-header">
                 <span>💧 Water Intake</span>
@@ -300,7 +395,7 @@ function App() {
                 ))}
               </div>
             </div>
-
+ 
             <div className="foodlog-card">
               <div className="foodlog-header">
                 <h3>Today's Food Log</h3>
@@ -346,7 +441,7 @@ function App() {
             </div>
           </div>
         )}
-
+ 
         {activeTab === 'log' && (
           <div className="tab-content">
             <div className="log-card">
@@ -386,7 +481,7 @@ function App() {
             </div>
           </div>
         )}
-
+ 
         {activeTab === 'progress' && (
           <div className="tab-content">
             <div className="progress-card">
@@ -434,7 +529,7 @@ function App() {
             </div>
           </div>
         )}
-
+ 
         {activeTab === 'profile' && (
           <div className="tab-content">
             <div className="profile-card">
@@ -520,7 +615,7 @@ function App() {
           </div>
         )}
       </div>
-
+ 
       <div className="bottomnav">
         {[
           { id: 'dashboard', icon: '🏠', label: 'Home' },
@@ -538,5 +633,6 @@ function App() {
     </div>
   );
 }
-
+ 
 export default App;
+ 
