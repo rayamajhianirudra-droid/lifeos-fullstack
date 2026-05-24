@@ -19,6 +19,7 @@ public class FoodLog {
     private double fat;
     private LocalDate date = LocalDate.now();
     private String insight;
+    private String mealType = "snack";
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
@@ -38,4 +39,6 @@ public class FoodLog {
     public void setDate(LocalDate date) { this.date = date; }
     public String getInsight() { return insight; }
     public void setInsight(String insight) { this.insight = insight; }
+    public String getMealType() { return mealType; }
+    public void setMealType(String mealType) { this.mealType = mealType; }
 }
