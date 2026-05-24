@@ -937,3 +937,57 @@ body {
 .profile-save-btn:hover {
   opacity: 0.9;
 }
+/* MEAL SELECTOR */
+.meal-selector {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.meal-btn {
+  background: #0f172a;
+  border: 1px solid #334155;
+  color: #64748b;
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.meal-btn:hover {
+  border-color: #38bdf8;
+  color: #94a3b8;
+}
+
+.meal-btn-active {
+  background: rgba(56,189,248,0.15) !important;
+  border-color: #38bdf8 !important;
+  color: #38bdf8 !important;
+  font-weight: 600;
+}
+
+/* MEAL SECTIONS */
+.meal-section {
+  margin-bottom: 16px;
+}
+
+.meal-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: #94a3b8;
+  border-bottom: 1px solid #1a2744;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.meal-section-cal {
+  color: #38bdf8;
+  font-size: 12px;
+}

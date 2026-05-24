@@ -20,8 +20,8 @@ function App() {
   const [message, setMessage] = useState('');
   const [activeTab, setActiveTab] = useState('dashboard');
   const [water, setWater] = useState(0);
+  const [mealType, setMealType] = useState('breakfast');
 
-  // Profile state
   const [profile, setProfile] = useState(() => {
     const saved = localStorage.getItem('profile');
     return saved ? JSON.parse(saved) : {
@@ -31,7 +31,6 @@ function App() {
   });
   const [profileSaved, setProfileSaved] = useState(false);
 
-  // BMR/TDEE Calculator
   const calculateDailyGoal = (p) => {
     const weightKg = p.weightLbs * 0.453592;
     const heightCm = (p.heightFeet * 30.48) + (p.heightInches * 2.54);
@@ -118,7 +117,8 @@ function App() {
     try {
       await axios.post(`${API}/foodlogs`, {
         foodName: food.name, calories: food.calories,
-        protein: food.protein, carbs: food.carbs, fat: food.fat
+        protein: food.protein, carbs: food.carbs, fat: food.fat,
+        mealType: mealType
       }, { headers: { Authorization: `Bearer ${token}` } });
       setMessage('✅ ' + food.name.substring(0, 30) + ' logged!');
       setSearchQuery('');
@@ -139,14 +139,21 @@ function App() {
   };
 
   const totalCalories = foodLogs.reduce((sum, f) => sum + f.calories, 0);
-  const totalProtein = foodLogs.reduce((sum, f) => sum + f.protein, 0);
-  const totalCarbs = foodLogs.reduce((sum, f) => sum + f.carbs, 0);
-  const totalFat = foodLogs.reduce((sum, f) => sum + f.fat, 0);
+  const totalProtein = Math.round(foodLogs.reduce((sum, f) => sum + f.protein, 0) * 10) / 10;
+  const totalCarbs = Math.round(foodLogs.reduce((sum, f) => sum + f.carbs, 0) * 10) / 10;
+  const totalFat = Math.round(foodLogs.reduce((sum, f) => sum + f.fat, 0) * 10) / 10;
   const caloriePercent = Math.min((totalCalories / dailyGoal) * 100, 100);
   const remaining = Math.max(dailyGoal - totalCalories, 0);
 
   const circumference = 2 * Math.PI * 54;
   const strokeDash = circumference - (caloriePercent / 100) * circumference;
+
+  const mealCategories = [
+    { key: 'breakfast', label: '🌅 Breakfast' },
+    { key: 'lunch', label: '☀️ Lunch' },
+    { key: 'dinner', label: '🌙 Dinner' },
+    { key: 'snack', label: '🍎 Snack' },
+  ];
 
   if (!token) {
     return (
@@ -223,7 +230,6 @@ function App() {
 
       <div className="main-content">
 
-        {/* DASHBOARD TAB */}
         {activeTab === 'dashboard' && (
           <div className="tab-content">
             <div className="calorie-card">
@@ -307,32 +313,54 @@ function App() {
                   <button className="empty-btn" onClick={() => setActiveTab('log')}>Log your first meal →</button>
                 </div>
               ) : (
-                foodLogs.map(f => (
-                  <div key={f.id} className="food-item">
-                    <div className="food-item-left">
-                      <p className="food-item-name">{f.foodName}</p>
-                      <p className="food-item-macros">{f.protein}g P · {f.carbs}g C · {f.fat}g F</p>
-                      {f.insight && f.insight !== 'A nutritious choice for your health!'
-                        ? <p className="food-insight">💡 {f.insight}</p>
-                        : <p className="food-insight-loading">⏳ Loading insight...</p>}
+                mealCategories.map(cat => {
+                  const items = foodLogs.filter(f => f.mealType === cat.key);
+                  if (items.length === 0) return null;
+                  return (
+                    <div key={cat.key} className="meal-section">
+                      <div className="meal-section-header">
+                        <span>{cat.label}</span>
+                        <span className="meal-section-cal">
+                          {items.reduce((s, f) => s + f.calories, 0)} cal
+                        </span>
+                      </div>
+                      {items.map(f => (
+                        <div key={f.id} className="food-item">
+                          <div className="food-item-left">
+                            <p className="food-item-name">{f.foodName}</p>
+                            <p className="food-item-macros">{f.protein}g P · {f.carbs}g C · {f.fat}g F</p>
+                            {f.insight && f.insight !== 'A nutritious choice for your health!'
+                              ? <p className="food-insight">💡 {f.insight}</p>
+                              : <p className="food-insight-loading">⏳ Loading insight...</p>}
+                          </div>
+                          <div style={{display:'flex', alignItems:'center', gap:'8px', flexShrink:0}}>
+                            <span className="food-item-cal">{f.calories} cal</span>
+                            <button onClick={() => deleteFood(f.id)} style={{background:'transparent', border:'none', color:'#ef4444', cursor:'pointer', fontSize:'18px', padding:'4px'}}>🗑️</button>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                    <div style={{display:'flex', alignItems:'center', gap:'8px', flexShrink:0}}>
-                      <span className="food-item-cal">{f.calories} cal</span>
-                      <button onClick={() => deleteFood(f.id)} style={{background:'transparent', border:'none', color:'#ef4444', cursor:'pointer', fontSize:'18px', padding:'4px'}}>🗑️</button>
-                    </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           </div>
         )}
 
-        {/* LOG FOOD TAB */}
         {activeTab === 'log' && (
           <div className="tab-content">
             <div className="log-card">
               <h3 className="log-title">Search & Log Food</h3>
               <p className="log-sub">Search from 600,000+ real foods including restaurants</p>
+              <div className="meal-selector">
+                {mealCategories.map(m => (
+                  <button key={m.key}
+                    className={`meal-btn ${mealType === m.key ? 'meal-btn-active' : ''}`}
+                    onClick={() => setMealType(m.key)}>
+                    {m.label}
+                  </button>
+                ))}
+              </div>
               <div className="search-row">
                 <input className="search-input" placeholder="Try: Big Mac, Banana, Grilled Chicken..."
                   value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
@@ -359,7 +387,6 @@ function App() {
           </div>
         )}
 
-        {/* PROGRESS TAB */}
         {activeTab === 'progress' && (
           <div className="tab-content">
             <div className="progress-card">
@@ -374,7 +401,7 @@ function App() {
                   <span className="progress-stat-label">Calories Eaten</span>
                 </div>
                 <div className="progress-stat">
-                  <span className="progress-stat-num">{Math.round(totalProtein)}g</span>
+                  <span className="progress-stat-num">{totalProtein}g</span>
                   <span className="progress-stat-label">Total Protein</span>
                 </div>
                 <div className="progress-stat">
@@ -387,9 +414,9 @@ function App() {
               <h3>Goal Progress</h3>
               {[
                 { label: 'Calories', val: totalCalories, goal: dailyGoal, color: '#38bdf8', unit: 'cal' },
-                { label: 'Protein', val: Math.round(totalProtein), goal: Math.round(dailyGoal * 0.3 / 4), color: '#38bdf8', unit: 'g' },
-                { label: 'Carbs', val: Math.round(totalCarbs), goal: Math.round(dailyGoal * 0.45 / 4), color: '#a78bfa', unit: 'g' },
-                { label: 'Fat', val: Math.round(totalFat), goal: Math.round(dailyGoal * 0.25 / 9), color: '#fb923c', unit: 'g' },
+                { label: 'Protein', val: totalProtein, goal: Math.round(dailyGoal * 0.3 / 4), color: '#38bdf8', unit: 'g' },
+                { label: 'Carbs', val: totalCarbs, goal: Math.round(dailyGoal * 0.45 / 4), color: '#a78bfa', unit: 'g' },
+                { label: 'Fat', val: totalFat, goal: Math.round(dailyGoal * 0.25 / 9), color: '#fb923c', unit: 'g' },
               ].map(item => (
                 <div key={item.label} className="progress-bar-section">
                   <div className="progress-bar-label">
@@ -408,13 +435,11 @@ function App() {
           </div>
         )}
 
-        {/* PROFILE TAB */}
         {activeTab === 'profile' && (
           <div className="tab-content">
             <div className="profile-card">
               <h3 className="profile-title">👤 My Profile</h3>
               <p className="profile-sub">Your stats power your personalized calorie goal</p>
-
               <div className="profile-goal-banner">
                 <span className="profile-goal-label">Your Daily Calorie Goal</span>
                 <span className="profile-goal-num">{dailyGoal} cal</span>
@@ -423,7 +448,6 @@ function App() {
                    profile.goal === 'gain' ? '💪 Muscle Gain' : '⚖️ Maintain Weight'}
                 </span>
               </div>
-
               <div className="profile-grid">
                 <div className="profile-field">
                   <label>Age</label>
@@ -446,7 +470,6 @@ function App() {
                     onChange={e => setProfile({...profile, heightInches: parseInt(e.target.value) || 0})} />
                 </div>
               </div>
-
               <div className="profile-field-full">
                 <label>Sex</label>
                 <div className="profile-options">
@@ -458,7 +481,6 @@ function App() {
                   ))}
                 </div>
               </div>
-
               <div className="profile-field-full">
                 <label>Activity Level</label>
                 <div className="profile-options">
@@ -476,7 +498,6 @@ function App() {
                   ))}
                 </div>
               </div>
-
               <div className="profile-field-full">
                 <label>Goal</label>
                 <div className="profile-options">
@@ -492,7 +513,6 @@ function App() {
                   ))}
                 </div>
               </div>
-
               <button className="profile-save-btn" onClick={saveProfile}>
                 {profileSaved ? '✅ Saved!' : 'Save Profile'}
               </button>
