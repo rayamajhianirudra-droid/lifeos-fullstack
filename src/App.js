@@ -25,8 +25,6 @@ function App() {
   const [newPassword, setNewPassword] = useState('');
   const [resetMessage, setResetMessage] = useState('');
   const [resetStep, setResetStep] = useState(1);
-
-  // Date filtering state
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
 
   const [profile, setProfile] = useState(() => {
@@ -344,7 +342,6 @@ function App() {
         {activeTab === 'dashboard' && (
           <div className="tab-content">
 
-            {/* DATE NAVIGATOR */}
             <div className="date-nav">
               <button className="date-nav-btn" onClick={() => changeDate(-1)}>‹</button>
               <div className="date-nav-center">
@@ -359,8 +356,8 @@ function App() {
             <div className="calorie-card">
               <div className="calorie-ring-wrapper">
                 <svg width="130" height="130" viewBox="0 0 130 130">
-                  <circle cx="65" cy="65" r="54" fill="none" stroke="#1a2744" strokeWidth="12"/>
-                  <circle cx="65" cy="65" r="54" fill="none" stroke="#38bdf8" strokeWidth="12"
+                  <circle cx="65" cy="65" r="54" fill="none" stroke="rgba(16,185,129,0.1)" strokeWidth="12"/>
+                  <circle cx="65" cy="65" r="54" fill="none" stroke="#10B981" strokeWidth="12"
                     strokeDasharray={circumference}
                     strokeDashoffset={strokeDash}
                     strokeLinecap="round"
@@ -379,7 +376,7 @@ function App() {
                 </div>
                 <div className="cal-stat-divider"/>
                 <div className="cal-stat">
-                  <span className="cal-stat-val" style={{color: remaining === 0 ? '#ef4444' : '#22c55e'}}>{remaining}</span>
+                  <span className="cal-stat-val" style={{color: remaining === 0 ? '#f87171' : '#10B981'}}>{remaining}</span>
                   <span className="cal-stat-label">Remaining</span>
                 </div>
                 <div className="cal-stat-divider"/>
@@ -392,9 +389,9 @@ function App() {
 
             <div className="macro-row">
               {[
-                { label: 'Protein', val: totalProtein, goal: Math.round(dailyGoal * 0.3 / 4), color: '#38bdf8', unit: 'g' },
-                { label: 'Carbs', val: totalCarbs, goal: Math.round(dailyGoal * 0.45 / 4), color: '#a78bfa', unit: 'g' },
-                { label: 'Fat', val: totalFat, goal: Math.round(dailyGoal * 0.25 / 9), color: '#fb923c', unit: 'g' },
+                { label: 'Protein', val: totalProtein, goal: Math.round(dailyGoal * 0.3 / 4), color: '#10B981', unit: 'g' },
+                { label: 'Carbs', val: totalCarbs, goal: Math.round(dailyGoal * 0.45 / 4), color: '#34d399', unit: 'g' },
+                { label: 'Fat', val: totalFat, goal: Math.round(dailyGoal * 0.25 / 9), color: '#6ee7b7', unit: 'g' },
               ].map(m => (
                 <div key={m.label} className="macro-card">
                   <div className="macro-top">
@@ -459,7 +456,7 @@ function App() {
                           </div>
                           <div style={{display:'flex', alignItems:'center', gap:'8px', flexShrink:0}}>
                             <span className="food-item-cal">{f.calories} cal</span>
-                            <button onClick={() => deleteFood(f.id)} style={{background:'transparent', border:'none', color:'#ef4444', cursor:'pointer', fontSize:'18px', padding:'4px'}}>🗑️</button>
+                            <button onClick={() => deleteFood(f.id)} style={{background:'transparent', border:'none', color:'#f87171', cursor:'pointer', fontSize:'18px', padding:'4px'}}>🗑️</button>
                           </div>
                         </div>
                       ))}
@@ -537,10 +534,10 @@ function App() {
             <div className="progress-card">
               <h3>Goal Progress</h3>
               {[
-                { label: 'Calories', val: totalCalories, goal: dailyGoal, color: '#38bdf8', unit: 'cal' },
-                { label: 'Protein', val: totalProtein, goal: Math.round(dailyGoal * 0.3 / 4), color: '#38bdf8', unit: 'g' },
-                { label: 'Carbs', val: totalCarbs, goal: Math.round(dailyGoal * 0.45 / 4), color: '#a78bfa', unit: 'g' },
-                { label: 'Fat', val: totalFat, goal: Math.round(dailyGoal * 0.25 / 9), color: '#fb923c', unit: 'g' },
+                { label: 'Calories', val: totalCalories, goal: dailyGoal, color: '#10B981', unit: 'cal' },
+                { label: 'Protein', val: totalProtein, goal: Math.round(dailyGoal * 0.3 / 4), color: '#10B981', unit: 'g' },
+                { label: 'Carbs', val: totalCarbs, goal: Math.round(dailyGoal * 0.45 / 4), color: '#34d399', unit: 'g' },
+                { label: 'Fat', val: totalFat, goal: Math.round(dailyGoal * 0.25 / 9), color: '#6ee7b7', unit: 'g' },
               ].map(item => (
                 <div key={item.label} className="progress-bar-section">
                   <div className="progress-bar-label">
