@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import './App.css';
- 
+
 const API = 'http://localhost:8080/api';
 const USDA_KEY = 'zFZ3LLHNi6jM9uLKavvLVtqFEQvledgKCy0t3xwy';
- 
+
 function App() {
   const [token, setToken] = useState(localStorage.getItem('token'));
   const [currentUser, setCurrentUser] = useState(localStorage.getItem('userName'));
@@ -25,7 +25,10 @@ function App() {
   const [newPassword, setNewPassword] = useState('');
   const [resetMessage, setResetMessage] = useState('');
   const [resetStep, setResetStep] = useState(1);
- 
+
+  // Date filtering state
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+
   const [profile, setProfile] = useState(() => {
     const saved = localStorage.getItem('profile');
     return saved ? JSON.parse(saved) : {
@@ -34,7 +37,7 @@ function App() {
     };
   });
   const [profileSaved, setProfileSaved] = useState(false);
- 
+
   const calculateDailyGoal = (p) => {
     const weightKg = p.weightLbs * 0.453592;
     const heightCm = (p.heightFeet * 30.48) + (p.heightInches * 2.54);
@@ -49,21 +52,43 @@ function App() {
     if (p.goal === 'gain') tdee += 500;
     return Math.round(tdee);
   };
- 
+
   const dailyGoal = calculateDailyGoal(profile);
- 
+
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { if (token) fetchFoodLogs(); }, [token]);
- 
-  const fetchFoodLogs = async () => {
+  useEffect(() => { if (token) fetchFoodLogs(selectedDate); }, [token]);
+
+  const fetchFoodLogs = async (date) => {
     try {
-      const res = await axios.get(`${API}/foodlogs`, {
+      const res = await axios.get(`${API}/foodlogs?date=${date}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setFoodLogs(res.data);
     } catch (err) { console.log(err); }
   };
- 
+
+  const changeDate = (direction) => {
+    const current = new Date(selectedDate);
+    current.setDate(current.getDate() + direction);
+    const newDate = current.toISOString().split('T')[0];
+    setSelectedDate(newDate);
+    fetchFoodLogs(newDate);
+  };
+
+  const goToToday = () => {
+    const today = new Date().toISOString().split('T')[0];
+    setSelectedDate(today);
+    fetchFoodLogs(today);
+  };
+
+  const formatDateLabel = (dateStr) => {
+    const today = new Date().toISOString().split('T')[0];
+    const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+    if (dateStr === today) return 'Today';
+    if (dateStr === yesterday) return 'Yesterday';
+    return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  };
+
   const handleAuth = async () => {
     try {
       const url = authMode === 'login' ? `${API}/auth/login` : `${API}/auth/register`;
@@ -82,7 +107,7 @@ function App() {
       setAuthMessage('❌ ' + (err.response?.data || 'Something went wrong'));
     }
   };
- 
+
   const handleForgotPassword = async () => {
     try {
       await axios.post(`${API}/auth/forgot-password`, { email: authEmail });
@@ -92,7 +117,7 @@ function App() {
       setResetMessage('❌ Something went wrong. Try again.');
     }
   };
- 
+
   const handleResetPassword = async () => {
     if (!resetToken || !newPassword) {
       setResetMessage('❌ Please enter both token and new password.');
@@ -115,7 +140,7 @@ function App() {
       setResetMessage('❌ Invalid or expired token.');
     }
   };
- 
+
   const logout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('userName');
@@ -123,13 +148,13 @@ function App() {
     setCurrentUser(null);
     setFoodLogs([]);
   };
- 
+
   const saveProfile = () => {
     localStorage.setItem('profile', JSON.stringify(profile));
     setProfileSaved(true);
     setTimeout(() => setProfileSaved(false), 2000);
   };
- 
+
   const searchFood = async () => {
     if (!searchQuery.trim()) return;
     setSearching(true);
@@ -149,7 +174,7 @@ function App() {
     } catch (err) { setMessage('❌ Food search failed.'); }
     setSearching(false);
   };
- 
+
   const logFood = async (food) => {
     try {
       await axios.post(`${API}/foodlogs`, {
@@ -160,38 +185,40 @@ function App() {
       setMessage('✅ ' + food.name.substring(0, 30) + ' logged!');
       setSearchQuery('');
       setSearchResults([]);
-      fetchFoodLogs();
-      setTimeout(() => fetchFoodLogs(), 4000);
+      fetchFoodLogs(selectedDate);
+      setTimeout(() => fetchFoodLogs(selectedDate), 4000);
       setTimeout(() => setMessage(''), 3000);
     } catch (err) { setMessage('❌ Error logging food.'); }
   };
- 
+
   const deleteFood = async (id) => {
     try {
       await axios.delete(`${API}/foodlogs/${id}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      fetchFoodLogs();
+      fetchFoodLogs(selectedDate);
     } catch (err) { setMessage('❌ Error deleting food.'); }
   };
- 
+
   const totalCalories = foodLogs.reduce((sum, f) => sum + f.calories, 0);
   const totalProtein = Math.round(foodLogs.reduce((sum, f) => sum + f.protein, 0) * 10) / 10;
   const totalCarbs = Math.round(foodLogs.reduce((sum, f) => sum + f.carbs, 0) * 10) / 10;
   const totalFat = Math.round(foodLogs.reduce((sum, f) => sum + f.fat, 0) * 10) / 10;
   const caloriePercent = Math.min((totalCalories / dailyGoal) * 100, 100);
   const remaining = Math.max(dailyGoal - totalCalories, 0);
- 
+
   const circumference = 2 * Math.PI * 54;
   const strokeDash = circumference - (caloriePercent / 100) * circumference;
- 
+
   const mealCategories = [
     { key: 'breakfast', label: '🌅 Breakfast' },
     { key: 'lunch', label: '☀️ Lunch' },
     { key: 'dinner', label: '🌙 Dinner' },
     { key: 'snack', label: '🍎 Snack' },
   ];
- 
+
+  const isToday = selectedDate === new Date().toISOString().split('T')[0];
+
   if (!token) {
     return (
       <div className="auth-page">
@@ -202,15 +229,12 @@ function App() {
             <p className="auth-logo-sub">Your personal nutrition intelligence</p>
           </div>
           <div className="auth-card">
- 
-            {/* FORGOT PASSWORD MODE */}
             {authMode === 'forgot' && (
               <>
                 <h2 className="auth-title">Reset Password</h2>
                 <p className="auth-subtitle">
                   {resetStep === 1 ? "Enter your email to receive a reset token" : "Enter the token from your email"}
                 </p>
- 
                 {resetStep === 1 && (
                   <>
                     <div className="input-group">
@@ -219,12 +243,9 @@ function App() {
                         value={authEmail} onChange={e => setAuthEmail(e.target.value)} />
                     </div>
                     {resetMessage && <p className={resetMessage.startsWith('✅') ? 'auth-success' : 'auth-error'}>{resetMessage}</p>}
-                    <button className="auth-btn" onClick={handleForgotPassword}>
-                      Send Reset Token
-                    </button>
+                    <button className="auth-btn" onClick={handleForgotPassword}>Send Reset Token</button>
                   </>
                 )}
- 
                 {resetStep === 2 && (
                   <>
                     <div className="input-group">
@@ -238,19 +259,14 @@ function App() {
                         value={newPassword} onChange={e => setNewPassword(e.target.value)} />
                     </div>
                     {resetMessage && <p className={resetMessage.startsWith('✅') ? 'auth-success' : 'auth-error'}>{resetMessage}</p>}
-                    <button className="auth-btn" onClick={handleResetPassword}>
-                      Reset Password
-                    </button>
+                    <button className="auth-btn" onClick={handleResetPassword}>Reset Password</button>
                   </>
                 )}
- 
                 <p className="auth-switch">
                   Remember your password? <span onClick={() => { setAuthMode('login'); setResetStep(1); setResetMessage(''); }}>Sign In</span>
                 </p>
               </>
             )}
- 
-            {/* LOGIN / REGISTER MODE */}
             {authMode !== 'forgot' && (
               <>
                 <h2 className="auth-title">
@@ -299,7 +315,7 @@ function App() {
       </div>
     );
   }
- 
+
   return (
     <div className="app">
       <nav className="topnav">
@@ -311,7 +327,7 @@ function App() {
           <button className="topnav-logout" onClick={logout}>Sign Out</button>
         </div>
       </nav>
- 
+
       <div className="tabbar">
         {['dashboard', 'log', 'progress', 'profile'].map(tab => (
           <button key={tab} className={`tab ${activeTab === tab ? 'tab-active' : ''}`}
@@ -322,11 +338,24 @@ function App() {
           </button>
         ))}
       </div>
- 
+
       <div className="main-content">
- 
+
         {activeTab === 'dashboard' && (
           <div className="tab-content">
+
+            {/* DATE NAVIGATOR */}
+            <div className="date-nav">
+              <button className="date-nav-btn" onClick={() => changeDate(-1)}>‹</button>
+              <div className="date-nav-center">
+                <span className="date-nav-label">{formatDateLabel(selectedDate)}</span>
+                {!isToday && (
+                  <button className="date-today-btn" onClick={goToToday}>Back to Today</button>
+                )}
+              </div>
+              <button className="date-nav-btn" onClick={() => changeDate(1)} disabled={isToday}>›</button>
+            </div>
+
             <div className="calorie-card">
               <div className="calorie-ring-wrapper">
                 <svg width="130" height="130" viewBox="0 0 130 130">
@@ -360,7 +389,7 @@ function App() {
                 </div>
               </div>
             </div>
- 
+
             <div className="macro-row">
               {[
                 { label: 'Protein', val: totalProtein, goal: Math.round(dailyGoal * 0.3 / 4), color: '#38bdf8', unit: 'g' },
@@ -382,7 +411,7 @@ function App() {
                 </div>
               ))}
             </div>
- 
+
             <div className="water-card">
               <div className="water-header">
                 <span>💧 Water Intake</span>
@@ -395,17 +424,17 @@ function App() {
                 ))}
               </div>
             </div>
- 
+
             <div className="foodlog-card">
               <div className="foodlog-header">
-                <h3>Today's Food Log</h3>
+                <h3>{formatDateLabel(selectedDate)}'s Food Log</h3>
                 <span className="foodlog-count">{foodLogs.length} items</span>
               </div>
               {foodLogs.length === 0 ? (
                 <div className="empty-state">
                   <span>🍽️</span>
-                  <p>No food logged yet</p>
-                  <button className="empty-btn" onClick={() => setActiveTab('log')}>Log your first meal →</button>
+                  <p>No food logged {isToday ? 'yet' : 'on this day'}</p>
+                  {isToday && <button className="empty-btn" onClick={() => setActiveTab('log')}>Log your first meal →</button>}
                 </div>
               ) : (
                 mealCategories.map(cat => {
@@ -441,7 +470,7 @@ function App() {
             </div>
           </div>
         )}
- 
+
         {activeTab === 'log' && (
           <div className="tab-content">
             <div className="log-card">
@@ -481,7 +510,7 @@ function App() {
             </div>
           </div>
         )}
- 
+
         {activeTab === 'progress' && (
           <div className="tab-content">
             <div className="progress-card">
@@ -529,7 +558,7 @@ function App() {
             </div>
           </div>
         )}
- 
+
         {activeTab === 'profile' && (
           <div className="tab-content">
             <div className="profile-card">
@@ -615,7 +644,7 @@ function App() {
           </div>
         )}
       </div>
- 
+
       <div className="bottomnav">
         {[
           { id: 'dashboard', icon: '🏠', label: 'Home' },
@@ -633,6 +662,5 @@ function App() {
     </div>
   );
 }
- 
+
 export default App;
- 
