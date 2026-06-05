@@ -7,6 +7,7 @@ import com.lifeos.lifeos_backend.service.FoodLogService;
 import com.lifeos.lifeos_backend.service.JwtService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import java.time.LocalDate;
 import java.util.List;
 
 @RestController
@@ -45,8 +46,13 @@ public class FoodLogController {
 
     @GetMapping
     public ResponseEntity<List<FoodLog>> getFoodLogs(
-            @RequestHeader("Authorization") String authHeader) {
+            @RequestHeader("Authorization") String authHeader,
+            @RequestParam(required = false) String date) {
         Long userId = getUserIdFromToken(authHeader);
+        if (date != null) {
+            LocalDate localDate = LocalDate.parse(date);
+            return ResponseEntity.ok(foodLogService.getFoodLogsByUserAndDate(userId, localDate));
+        }
         return ResponseEntity.ok(foodLogService.getFoodLogsByUser(userId));
     }
 

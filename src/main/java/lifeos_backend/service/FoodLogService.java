@@ -3,6 +3,7 @@ package com.lifeos.lifeos_backend.service;
 import com.lifeos.lifeos_backend.model.FoodLog;
 import com.lifeos.lifeos_backend.repository.FoodLogRepository;
 import org.springframework.stereotype.Service;
+import java.time.LocalDate;
 import java.util.List;
 
 @Service
@@ -28,6 +29,10 @@ public class FoodLogService {
 
     public List<FoodLog> getFoodLogsByUser(Long userId) {
         return foodLogRepository.findByUserId(userId);
+    }
+
+    public List<FoodLog> getFoodLogsByUserAndDate(Long userId, LocalDate date) {
+        return foodLogRepository.findByUserIdAndDate(userId, date);
     }
 
     public List<FoodLog> getAllFoodLogs() {
