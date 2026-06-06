@@ -26,7 +26,7 @@ function App() {
   const [resetMessage, setResetMessage] = useState('');
   const [resetStep, setResetStep] = useState(1);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
-
+  const [streak, setStreak] = useState(0);
   const [profile, setProfile] = useState(() => {
     const saved = localStorage.getItem('profile');
     return saved ? JSON.parse(saved) : {
