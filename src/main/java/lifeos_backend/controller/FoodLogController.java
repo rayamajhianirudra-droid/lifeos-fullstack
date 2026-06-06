@@ -9,6 +9,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/foodlogs")
@@ -54,6 +55,14 @@ public class FoodLogController {
             return ResponseEntity.ok(foodLogService.getFoodLogsByUserAndDate(userId, localDate));
         }
         return ResponseEntity.ok(foodLogService.getFoodLogsByUser(userId));
+    }
+
+    @GetMapping("/streak")
+    public ResponseEntity<Map<String, Integer>> getStreak(
+            @RequestHeader("Authorization") String authHeader) {
+        Long userId = getUserIdFromToken(authHeader);
+        int streak = foodLogService.getStreakForUser(userId);
+        return ResponseEntity.ok(Map.of("streak", streak));
     }
 
     @DeleteMapping("/{id}")

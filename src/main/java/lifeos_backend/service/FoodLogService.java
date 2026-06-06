@@ -35,6 +35,24 @@ public class FoodLogService {
         return foodLogRepository.findByUserIdAndDate(userId, date);
     }
 
+    public int getStreakForUser(Long userId) {
+        List<LocalDate> dates = foodLogRepository.findDistinctDatesByUserId(userId);
+        if (dates.isEmpty()) return 0;
+
+        int streak = 0;
+        LocalDate expected = LocalDate.now();
+
+        for (LocalDate date : dates) {
+            if (date.equals(expected)) {
+                streak++;
+                expected = expected.minusDays(1);
+            } else if (date.isBefore(expected)) {
+                break;
+            }
+        }
+        return streak;
+    }
+
     public List<FoodLog> getAllFoodLogs() {
         return foodLogRepository.findAll();
     }
