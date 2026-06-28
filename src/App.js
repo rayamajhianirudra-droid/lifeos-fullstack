@@ -27,6 +27,9 @@ function App() {
   const [resetStep, setResetStep] = useState(1);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [streak, setStreak] = useState(0);
+  const [weightLbs, setWeightLbs] = useState('');
+  const [weightLogs, setWeightLogs] = useState([]);
+
   const [profile, setProfile] = useState(() => {
     const saved = localStorage.getItem('profile');
     return saved ? JSON.parse(saved) : {
@@ -53,8 +56,13 @@ function App() {
 
   const dailyGoal = calculateDailyGoal(profile);
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { if (token) fetchFoodLogs(selectedDate); }, [token]);
+  useEffect(() => {
+    if (token) {
+      fetchFoodLogs(selectedDate);
+      fetchStreak();
+      fetchWeightLogs();
+    }
+  }, [token]); // eslint-disable-line
 
   const fetchFoodLogs = async (date) => {
     try {
@@ -62,6 +70,44 @@ function App() {
         headers: { Authorization: `Bearer ${token}` }
       });
       setFoodLogs(res.data);
+    } catch (err) { console.log(err); }
+  };
+
+  const fetchStreak = async () => {
+    try {
+      const res = await axios.get(`${API}/foodlogs/streak`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setStreak(res.data.streak);
+    } catch (err) { console.log(err); }
+  };
+
+  const fetchWeightLogs = async () => {
+    try {
+      const res = await axios.get(`${API}/weight`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setWeightLogs(res.data);
+    } catch (err) { console.log(err); }
+  };
+
+  const logWeight = async () => {
+    if (!weightLbs) return;
+    try {
+      await axios.post(`${API}/weight`, {
+        weightLbs: parseFloat(weightLbs)
+      }, { headers: { Authorization: `Bearer ${token}` } });
+      setWeightLbs('');
+      fetchWeightLogs();
+    } catch (err) { console.log(err); }
+  };
+
+  const deleteWeight = async (id) => {
+    try {
+      await axios.delete(`${API}/weight/${id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      fetchWeightLogs();
     } catch (err) { console.log(err); }
   };
 
@@ -145,6 +191,8 @@ function App() {
     setToken(null);
     setCurrentUser(null);
     setFoodLogs([]);
+    setStreak(0);
+    setWeightLogs([]);
   };
 
   const saveProfile = () => {
@@ -184,6 +232,7 @@ function App() {
       setSearchQuery('');
       setSearchResults([]);
       fetchFoodLogs(selectedDate);
+      fetchStreak();
       setTimeout(() => fetchFoodLogs(selectedDate), 4000);
       setTimeout(() => setMessage(''), 3000);
     } catch (err) { setMessage('❌ Error logging food.'); }
@@ -195,6 +244,7 @@ function App() {
         headers: { Authorization: `Bearer ${token}` }
       });
       fetchFoodLogs(selectedDate);
+      fetchStreak();
     } catch (err) { setMessage('❌ Error deleting food.'); }
   };
 
@@ -341,6 +391,17 @@ function App() {
 
         {activeTab === 'dashboard' && (
           <div className="tab-content">
+
+            {streak > 0 && (
+              <div className="streak-banner">
+                <span className="streak-fire">🔥</span>
+                <span className="streak-num">{streak}</span>
+                <span className="streak-text">Day Streak</span>
+                {streak >= 30 && <span className="streak-badge">💎 Monthly Master</span>}
+                {streak >= 7 && streak < 30 && <span className="streak-badge">⭐ Week Warrior</span>}
+                {streak >= 3 && streak < 7 && <span className="streak-badge">🌱 On a Roll</span>}
+              </div>
+            )}
 
             <div className="date-nav">
               <button className="date-nav-btn" onClick={() => changeDate(-1)}>‹</button>
@@ -526,11 +587,12 @@ function App() {
                   <span className="progress-stat-label">Total Protein</span>
                 </div>
                 <div className="progress-stat">
-                  <span className="progress-stat-num">{water}</span>
-                  <span className="progress-stat-label">Glasses of Water</span>
+                  <span className="progress-stat-num">🔥{streak}</span>
+                  <span className="progress-stat-label">Day Streak</span>
                 </div>
               </div>
             </div>
+
             <div className="progress-card">
               <h3>Goal Progress</h3>
               {[
@@ -552,6 +614,48 @@ function App() {
                   </div>
                 </div>
               ))}
+            </div>
+
+            {/* WEIGHT TRACKER */}
+            <div className="progress-card">
+              <h3>⚖️ Weight Tracker</h3>
+              <div className="weight-input-row">
+                <input
+                  type="number"
+                  className="weight-input"
+                  placeholder="Enter weight (lbs)"
+                  value={weightLbs}
+                  onChange={e => setWeightLbs(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && logWeight()}
+                />
+                <button className="weight-log-btn" onClick={logWeight}>Log</button>
+              </div>
+              {weightLogs.length === 0 ? (
+                <div className="empty-state">
+                  <span>⚖️</span>
+                  <p>No weight logged yet</p>
+                </div>
+              ) : (
+                <div className="weight-list">
+                  {weightLogs.slice(0, 7).map(w => (
+                    <div key={w.id} className="weight-item">
+                      <span className="weight-date">
+                        {new Date(w.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                      </span>
+                      <span className="weight-val">{w.weightLbs} lbs</span>
+                      <button onClick={() => deleteWeight(w.id)}
+                        style={{background:'transparent', border:'none', color:'#f87171', cursor:'pointer', fontSize:'16px'}}>🗑️</button>
+                    </div>
+                  ))}
+                  {weightLogs.length >= 2 && (
+                    <div className="weight-change">
+                      {weightLogs[0].weightLbs < weightLogs[weightLogs.length - 1].weightLbs
+                        ? `📉 Lost ${(weightLogs[weightLogs.length - 1].weightLbs - weightLogs[0].weightLbs).toFixed(1)} lbs total`
+                        : `📈 Gained ${(weightLogs[0].weightLbs - weightLogs[weightLogs.length - 1].weightLbs).toFixed(1)} lbs total`}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         )}
