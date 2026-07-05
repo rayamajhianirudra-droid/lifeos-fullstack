@@ -1,6 +1,7 @@
 {
-  "short_name": "React App",
-  "name": "Create React App Sample",
+  "short_name": "LifeOS",
+  "name": "LifeOS Health — Your Personal Nutrition Intelligence",
+  "description": "Track nutrition, exercise, weight and get AI coaching",
   "icons": [
     {
       "src": "favicon.ico",
@@ -20,6 +21,24 @@
   ],
   "start_url": ".",
   "display": "standalone",
-  "theme_color": "#000000",
-  "background_color": "#ffffff"
+  "theme_color": "#5B4FD4",
+  "background_color": "#F5F5F8",
+  "orientation": "portrait",
+  "categories": ["health", "fitness", "food"],
+  "shortcuts": [
+    {
+      "name": "Log Food",
+      "short_name": "Log",
+      "description": "Quickly log your meal",
+      "url": "/?tab=log",
+      "icons": [{ "src": "logo192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Dashboard",
+      "short_name": "Dashboard",
+      "description": "View your health dashboard",
+      "url": "/?tab=dashboard",
+      "icons": [{ "src": "logo192.png", "sizes": "192x192" }]
+    }
+  ]
 }
