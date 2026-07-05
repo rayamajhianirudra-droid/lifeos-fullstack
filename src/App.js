@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import './App.css';
 
 const API = 'http://localhost:8080/api';
@@ -85,6 +85,48 @@ function App() {
     }
     localStorage.setItem('darkMode', darkMode);
   }, [darkMode]);
+  // MEAL REMINDERS
+  useEffect(() => {
+    if (!token) return;
+
+    const requestNotificationPermission = async () => {
+      if ('Notification' in window && Notification.permission === 'default') {
+        await Notification.requestPermission();
+      }
+    };
+    requestNotificationPermission();
+
+    const checkAndNotify = () => {
+      if (Notification.permission !== 'granted') return;
+      const hour = new Date().getHours();
+      const hasBreakfast = foodLogs.some(f => f.mealType === 'breakfast');
+      const hasLunch = foodLogs.some(f => f.mealType === 'lunch');
+      const hasDinner = foodLogs.some(f => f.mealType === 'dinner');
+
+      if (hour === 8 && !hasBreakfast) {
+        new Notification('🌅 LifeOS — Breakfast time!', {
+          body: `Good morning ${currentUser}! Don't forget to log your breakfast.`,
+          icon: '/favicon.ico'
+        });
+      }
+      if (hour === 12 && !hasLunch) {
+        new Notification('☀️ LifeOS — Lunch time!', {
+          body: `Hey ${currentUser}! Log your lunch to stay on track.`,
+          icon: '/favicon.ico'
+        });
+      }
+      if (hour === 18 && !hasDinner) {
+        new Notification('🌙 LifeOS — Dinner time!', {
+          body: `${currentUser}, don't forget to log dinner. Keep your streak alive! 🔥`,
+          icon: '/favicon.ico'
+        });
+      }
+    };
+
+    const interval = setInterval(checkAndNotify, 30 * 60 * 1000);
+    checkAndNotify();
+    return () => clearInterval(interval);
+  }, [token, foodLogs]); // eslint-disable-line
 
   const fetchFoodLogs = async (date) => {
     try {
@@ -193,11 +235,11 @@ function App() {
     const newHistory = [...chatHistory, { role: 'user', text: userMsg }];
     setChatHistory(newHistory);
 
-    const context = `User stats: ${profile.age}yo ${profile.sex}, ${profile.weightLbs}lbs, 
-    ${profile.heightFeet}'${profile.heightInches}", goal: ${profile.goal}, 
+    const context = `User stats: ${profile.age}yo ${profile.sex}, ${profile.weightLbs}lbs,
+    ${profile.heightFeet}'${profile.heightInches}", goal: ${profile.goal},
     activity: ${profile.activity}. Daily calorie goal: ${dailyGoal} kcal.
-    Today: consumed ${totalCalories} cal, ${totalProtein}g protein, ${totalCarbs}g carbs, 
-    ${totalFat}g fat. Burned ${totalBurned} cal. Water: ${water}/8 glasses. 
+    Today: consumed ${totalCalories} cal, ${totalProtein}g protein, ${totalCarbs}g carbs,
+    ${totalFat}g fat. Burned ${totalBurned} cal. Water: ${water}/8 glasses.
     Streak: ${streak} days. BMI: ${bmi} (${bmiLabel}).`;
 
     try {
@@ -226,7 +268,6 @@ function App() {
       ];
       return responses[Math.floor(Math.random() * responses.length)];
     }
-
     if (msg.includes('eat') || msg.includes('food') || msg.includes('dinner') || msg.includes('lunch') || msg.includes('meal')) {
       const remaining = dailyGoal - totalCalories;
       const proteinLeft = proteinGoal - totalProtein;
@@ -237,19 +278,16 @@ function App() {
       else
         return `You're only ${remaining} calories away from your goal ${firstName}. A small snack — handful of nuts or some fruit — and you're done for the day.`;
     }
-
     if (msg.includes('workout') || msg.includes('exercise') || msg.includes('train')) {
       if (totalBurned > 0)
         return `You've already burned ${totalBurned} calories today. Nice work. If you want more, a 20-30 min walk or light session is plenty — don't overtrain.`;
       return `No exercise logged yet today. Even a 30 minute walk burns 150-200 calories. Movement is non-negotiable ${firstName} — get it done.`;
     }
-
     if (msg.includes('protein')) {
       if (totalProtein >= proteinGoal)
         return `Protein goal crushed — ${totalProtein}g of ${proteinGoal}g. That's how you build and maintain muscle. Keep this up every day.`;
       return `You're at ${totalProtein}g of your ${proteinGoal}g protein goal. Need ${(proteinGoal - totalProtein).toFixed(0)}g more. Chicken breast, eggs, Greek yogurt or a protein shake. Pick one now.`;
     }
-
     if (msg.includes('track') || msg.includes('progress') || msg.includes('doing')) {
       const pct = Math.round((totalCalories / dailyGoal) * 100);
       if (pct < 30)
@@ -258,15 +296,10 @@ function App() {
         return `You're over your calorie goal by ${totalCalories - dailyGoal} calories. No more eating tonight. Water and sleep — that's the plan.`;
       return `${pct}% of calories hit, protein at ${Math.round((totalProtein/proteinGoal)*100)}%, ${water}/8 glasses of water. ${streak > 0 ? `${streak} day streak alive.` : 'Start your streak today.'} ${pct > 80 ? 'Solid day.' : 'Still work to do.'}`;
     }
-
-    if (msg.includes('weight') || msg.includes('lose') || msg.includes('fat')) {
+    if (msg.includes('weight') || msg.includes('lose') || msg.includes('fat'))
       return `Stay in your calorie deficit consistently — that's the only thing that works. Protein keeps you full and preserves muscle. Log everything, even the small stuff. Consistency over perfection.`;
-    }
-
-    if (msg.includes('bmi')) {
+    if (msg.includes('bmi'))
       return `Your BMI is ${bmi} — ${bmiLabel}. ${parseFloat(bmi) < 25 ? 'You\'re in a healthy range. Focus on body composition now — build muscle, reduce fat.' : 'Focus on gradual weight loss through consistent deficit. 0.5-1 lb per week is sustainable and healthy.'}`;
-    }
-
     const pct = Math.round((totalCalories / dailyGoal) * 100);
     return `${totalCalories} of ${dailyGoal} calories today — ${pct}% there. Protein at ${totalProtein}g/${proteinGoal}g. ${streak > 0 ? `${streak} day streak.` : ''} ${pct > 80 ? 'Strong day.' : 'Keep pushing.'}`;
   };
@@ -475,6 +508,13 @@ function App() {
     contentStyle: { background: darkMode ? '#1a1a2e' : '#fff', border: darkMode ? '1px solid rgba(255,255,255,.1)' : '.5px solid #EBEBF0', borderRadius: '12px', fontSize: '12px' },
     labelStyle: { color: darkMode ? '#F0F0FF' : '#0A0A14', fontWeight: '600' },
   };
+
+  const pieData = [
+    { name: 'Protein', value: Math.round(totalProtein * 4), grams: totalProtein, pct: totalCalories > 0 ? Math.round((totalProtein * 4 / totalCalories) * 100) : 0 },
+    { name: 'Carbs', value: Math.round(totalCarbs * 4), grams: totalCarbs, pct: totalCalories > 0 ? Math.round((totalCarbs * 4 / totalCalories) * 100) : 0 },
+    { name: 'Fat', value: Math.round(totalFat * 9), grams: totalFat, pct: totalCalories > 0 ? Math.round((totalFat * 9 / totalCalories) * 100) : 0 },
+  ];
+  const pieColors = ['#5B4FD4', '#1D9E75', '#E8820C'];
 
   const quickPrompts = [
     'What should I eat for dinner?',
@@ -865,7 +905,7 @@ function App() {
                   {exerciseLogs.map(e => (
                     <div key={e.id} className="weight-item">
                       <div>
-                        <div style={{fontSize:'13px',fontWeight:'600',color:'#0A0A14'}}>{e.exerciseName}</div>
+                        <div style={{fontSize:'13px',fontWeight:'600',color: darkMode ? '#F0F0FF' : '#0A0A14'}}>{e.exerciseName}</div>
                         <div style={{fontSize:'11px',color:'#9898AA',marginTop:'2px'}}>{e.category} · {e.durationMinutes} min</div>
                       </div>
                       <span className="weight-val" style={{color:'#E8820C'}}>{e.caloriesBurned} cal</span>
@@ -897,6 +937,56 @@ function App() {
                 <div className="progress-stat"><span className="progress-stat-num">🔥{streak}</span><span className="progress-stat-label">Day Streak</span></div>
               </div>
             </div>
+
+            {/* MACRO PIE CHART */}
+            <div className="progress-card">
+              <h3>🥧 Today's Macro Breakdown</h3>
+              <p style={{fontSize:'12px',color:'#9898AA',marginBottom:'16px'}}>Visual breakdown of your macros today</p>
+              {totalCalories === 0 ? (
+                <div className="empty-state">
+                  <span>🥧</span>
+                  <p>Log some food to see your macro breakdown</p>
+                </div>
+              ) : (
+                <div style={{display:'flex',alignItems:'center',gap:'24px',flexWrap:'wrap'}}>
+                  <ResponsiveContainer width={200} height={200}>
+                    <PieChart>
+                      <Pie data={pieData} cx="50%" cy="50%" innerRadius={55} outerRadius={85}
+                        paddingAngle={3} dataKey="value">
+                        {pieData.map((_, index) => (
+                          <Cell key={index} fill={pieColors[index]}/>
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        formatter={(value, name, props) => [`${props.payload.grams}g (${value} cal)`, name]}
+                        contentStyle={{background: darkMode ? '#1a1a2e' : '#fff', border: darkMode ? '1px solid rgba(255,255,255,.1)' : '.5px solid #EBEBF0', borderRadius:'12px', fontSize:'12px'}}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div style={{flex:1,display:'flex',flexDirection:'column',gap:'12px',minWidth:'160px'}}>
+                    {pieData.map((m, i) => (
+                      <div key={m.name} style={{display:'flex',alignItems:'center',gap:'10px'}}>
+                        <div style={{width:'10px',height:'10px',borderRadius:'50%',background:pieColors[i],flexShrink:0}}/>
+                        <div style={{flex:1}}>
+                          <div style={{display:'flex',justifyContent:'space-between',marginBottom:'4px'}}>
+                            <span style={{fontSize:'12px',fontWeight:'600',color: darkMode ? '#F0F0FF' : '#0A0A14'}}>{m.name}</span>
+                            <span style={{fontSize:'11px',color:'#9898AA'}}>{m.grams}g · {m.pct}%</span>
+                          </div>
+                          <div style={{height:'4px',background: darkMode ? 'rgba(255,255,255,.08)' : '#F0F0F4',borderRadius:'2px',overflow:'hidden'}}>
+                            <div style={{height:'100%',width:`${m.pct}%`,background:pieColors[i],borderRadius:'2px'}}/>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    <div style={{marginTop:'4px',padding:'10px 12px',background: darkMode ? 'rgba(255,255,255,.04)' : '#F7F7FA',borderRadius:'10px',border: darkMode ? '.5px solid rgba(255,255,255,.06)' : '.5px solid #EBEBF0'}}>
+                      <div style={{fontSize:'11px',color:'#9898AA',marginBottom:'2px'}}>Total Calories</div>
+                      <div style={{fontSize:'15px',fontWeight:'700',color: darkMode ? '#F0F0FF' : '#0A0A14'}}>{totalCalories} kcal</div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
             <div className="progress-card">
               <h3>📈 Weekly Calories</h3>
               <p style={{fontSize:'12px',color:'#9898AA',marginBottom:'16px'}}>Last 7 days calorie intake</p>
@@ -1039,7 +1129,7 @@ function App() {
                 {chatHistory.length === 0 && (
                   <div className="chat-welcome">
                     <div style={{fontSize:'40px',marginBottom:'12px'}}>🤖</div>
-                    <div style={{fontSize:'15px',fontWeight:'700',color:'#0A0A14',marginBottom:'6px'}}>Hi {currentUser}! I'm your AI Coach</div>
+                    <div style={{fontSize:'15px',fontWeight:'700',color: darkMode ? '#F0F0FF' : '#0A0A14',marginBottom:'6px'}}>Hi {currentUser}! I'm your AI Coach</div>
                     <div style={{fontSize:'12px',color:'#9898AA',marginBottom:'20px'}}>Ask me anything about your nutrition, fitness goals, or health!</div>
                     <div className="quick-prompts">
                       {quickPrompts.map((p,i) => (
@@ -1124,6 +1214,32 @@ function App() {
                   ))}
                 </div>
               </div>
+              <div className="profile-field-full" style={{marginTop:'8px'}}>
+  <label>Meal Reminders</label>
+  <div style={{marginTop:'10px',padding:'14px',background: darkMode ? 'rgba(255,255,255,.04)' : '#F7F7FA',borderRadius:'12px',border: darkMode ? '.5px solid rgba(255,255,255,.06)' : '.5px solid #EBEBF0'}}>
+    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+      <div>
+        <div style={{fontSize:'13px',fontWeight:'600',color: darkMode ? '#F0F0FF' : '#0A0A14'}}>Push Notifications</div>
+        <div style={{fontSize:'11px',color:'#9898AA',marginTop:'2px'}}>Breakfast 8AM · Lunch 12PM · Dinner 6PM</div>
+      </div>
+      <button
+        onClick={async () => {
+          if ('Notification' in window) {
+            const perm = await Notification.requestPermission();
+            if (perm === 'granted') {
+              new Notification('✅ LifeOS Reminders On!', {
+                body: "You'll get meal reminders at 8AM, 12PM and 6PM.",
+                icon: '/favicon.ico'
+              });
+            }
+          }
+        }}
+        style={{background:'#5B4FD4',color:'#fff',border:'none',borderRadius:'10px',padding:'8px 16px',fontSize:'12px',fontWeight:'600',cursor:'pointer'}}>
+        {typeof Notification !== 'undefined' && Notification.permission === 'granted' ? '✅ Enabled' : 'Enable'}
+      </button>
+    </div>
+  </div>
+</div>
               <button className="profile-save-btn" onClick={saveProfile}>{profileSaved ? '✅ Saved!' : 'Save Profile'}</button>
             </div>
           </div>
