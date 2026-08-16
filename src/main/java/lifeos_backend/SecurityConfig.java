@@ -10,6 +10,7 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+
 import java.util.List;
 
 @Configuration
@@ -35,7 +36,9 @@ public class SecurityConfig {
                 "http://localhost:3001",
                 "http://localhost:3002",
                 "http://localhost:3003",
-                "https://lifeos-fullstack-ebon.vercel.app"
+                "https://lifeos-fullstack-ebon.vercel.app",
+                "https://lifeoshealth.com",
+                "https://www.lifeoshealth.com"
         ));
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
