@@ -10,9 +10,7 @@ import java.util.HashMap;
 @Service
 public class AiInsightService {
     private final WebClient webClient;
-    private final String apiKey = System.getenv("GEMINI_API_KEY") != null
-            ? System.getenv("GEMINI_API_KEY")
-            : "AIzaSyDNMcWVNPim5v1_miXom6pjacu9a7ps2EQ";
+    private final String apiKey = System.getenv("GEMINI_API_KEY");
     private final HashMap<String, String> cache = new HashMap<>();
 
     public AiInsightService() {
