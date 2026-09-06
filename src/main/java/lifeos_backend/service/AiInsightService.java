@@ -55,6 +55,8 @@ public class AiInsightService {
 
     public String getChatResponse(String message, String context, List<Map<String, String>> history) {
         try {
+            System.out.println("USING API KEY (first 10 chars): " + (apiKey != null ? apiKey.substring(0, Math.min(10, apiKey.length())) : "NULL"));
+
             String systemPrompt = "You are an encouraging, knowledgeable health and fitness coach inside the LifeOS app. "
                     + "Be warm but honest, keep responses concise (2-4 sentences unless the user asks for detail), "
                     + "and give specific, actionable advice grounded in the user's actual data below. "
