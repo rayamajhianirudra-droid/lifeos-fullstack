@@ -92,7 +92,7 @@ public class AiInsightService {
             Map<String, Object> body = Map.of("contents", contents);
 
             Map response = webClient.post()
-                    .uri("/v1beta/models/gemini-2.0-flash:generateContent?key=" + apiKey)
+                    .uri("/v1beta/models/gemini-2.5-flash:generateContent?key=" + apiKey)
                     .contentType(MediaType.APPLICATION_JSON)
                     .bodyValue(body)
                     .retrieve()
