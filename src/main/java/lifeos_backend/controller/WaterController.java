@@ -2,7 +2,7 @@ package lifeos_backend.controller;
 
 import lifeos_backend.model.WaterLog;
 import lifeos_backend.repository.WaterRepository;
-import lifeos_backend.service.JwtService;
+import com.lifeos.lifeos_backend.service.JwtService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
