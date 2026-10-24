@@ -3,7 +3,7 @@ import axios from 'axios';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import './App.css';
 
-const API = process.env.REACT_APP_API_URL || 'http://localhost:8080/api';
+const API = 'http://localhost:8080/api';
 const USDA_KEY = 'zFZ3LLHNi6jM9uLKavvLVtqFEQvledgKCy0t3xwy';
 
 function App() {
@@ -30,12 +30,17 @@ function App() {
   const [streak, setStreak] = useState(0);
   const [weightLbs, setWeightLbs] = useState('');
   const [weightLogs, setWeightLogs] = useState([]);
+  const [waistInches, setWaistInches] = useState('');
+  const [neckInches, setNeckInches] = useState('');
+  const [hipInches, setHipInches] = useState('');
+  const [bodyFatLogs, setBodyFatLogs] = useState([]);
   const [exerciseLogs, setExerciseLogs] = useState([]);
   const [exerciseName, setExerciseName] = useState('');
   const [exerciseDuration, setExerciseDuration] = useState('');
   const [exerciseCategory, setExerciseCategory] = useState('cardio');
   const [totalBurned, setTotalBurned] = useState(0);
   const [weeklyData, setWeeklyData] = useState([]);
+  const [dailyHistory, setDailyHistory] = useState([]);
   const [aiMessage, setAiMessage] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
   const [chatHistory, setChatHistory] = useState([]);
@@ -49,6 +54,42 @@ function App() {
     };
   });
   const [profileSaved, setProfileSaved] = useState(false);
+  // --- Supplement Tracker ---
+  const [supplementLogs, setSupplementLogs] = useState([]);
+  const [suppName, setSuppName] = useState('');
+  const [suppDosage, setSuppDosage] = useState('');
+  const [suppUnit, setSuppUnit] = useState('mg');
+  const [suppTime, setSuppTime] = useState('morning');
+  const [suppMsg, setSuppMsg] = useState('');
+
+  // --- Sleep Tracker ---
+  const [sleepLogs, setSleepLogs] = useState([]);
+  const [sleepHours, setSleepHours] = useState('');
+  const [sleepQuality, setSleepQuality] = useState('good');
+  const [sleepBedtime, setSleepBedtime] = useState('');
+  const [sleepWakeTime, setSleepWakeTime] = useState('');
+  const [sleepNotes, setSleepNotes] = useState('');
+  const [sleepMsg, setSleepMsg] = useState('');
+
+  // --- Mood Tracker ---
+  const [moodLogs, setMoodLogs] = useState([]);
+  const [moodScore, setMoodScore] = useState(5);
+  const [moodEnergy, setMoodEnergy] = useState('medium');
+  const [moodStress, setMoodStress] = useState('low');
+  const [moodNotes, setMoodNotes] = useState('');
+  const [moodMsg, setMoodMsg] = useState('');
+
+  // --- Custom Food ---
+  const [customFoods, setCustomFoods] = useState([]);
+  const [customFoodName, setCustomFoodName] = useState('');
+  const [customFoodCal, setCustomFoodCal] = useState('');
+  const [customFoodProtein, setCustomFoodProtein] = useState('');
+  const [customFoodCarbs, setCustomFoodCarbs] = useState('');
+  const [customFoodFat, setCustomFoodFat] = useState('');
+  const [customFoodServing, setCustomFoodServing] = useState('100');
+  const [customFoodUnit, setCustomFoodUnit] = useState('g');
+  const [customFoodMsg, setCustomFoodMsg] = useState('');
+  const [showCustomForm, setShowCustomForm] = useState(false);
 
   const calculateDailyGoal = (p) => {
     const weightKg = p.weightLbs * 0.453592;
@@ -66,14 +107,17 @@ function App() {
   };
 
   const dailyGoal = calculateDailyGoal(profile);
+  const heightInchesTotal = profile.heightFeet * 12 + profile.heightInches;
 
   useEffect(() => {
     if (token) {
       fetchFoodLogs(selectedDate);
       fetchStreak();
       fetchWeightLogs();
+      fetchBodyFatLogs();
       fetchExerciseLogs(selectedDate);
       fetchWeeklyData();
+      fetchDailyHistory();
     }
   }, [token]); // eslint-disable-line
 
@@ -85,6 +129,58 @@ function App() {
     }
     localStorage.setItem('darkMode', darkMode);
   }, [darkMode]);
+  // Helper: extract user ID from the JWT token payload
+  const getUserIdFromToken = (jwt) => {
+    try {
+      const payload = JSON.parse(atob(jwt.split('.')[1]));
+      return payload.userId || payload.id || payload.sub || null;
+    } catch (e) {
+      console.log('Could not decode token:', e);
+      return null;
+    }
+  };
+
+  // PUSH NOTIFICATIONS - subscribe on login
+  useEffect(() => {
+    if (!token) return;
+
+    const subscribeToPush = async () => {
+      if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+
+      const permission = await Notification.requestPermission();
+      if (permission !== 'granted') return;
+
+      const userId = getUserIdFromToken(token);
+      if (!userId) {
+        console.log('Could not determine user ID from token — push subscription skipped.');
+        return;
+      }
+
+      try {
+        const registration = await navigator.serviceWorker.ready;
+        const existing = await registration.pushManager.getSubscription();
+        const subscription = existing || await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(
+            'BO7mkNN_C_6Ex34wPYEFZL9xMaCnuGb3UuJt49qUwyhS726jv9_NwbUGn5X0Io_enG61kcFOxWr9xadUFVqLQVg'
+          ),
+        });
+
+        await axios.post(`${API}/push/subscribe`, {
+          userId: userId,
+          endpoint: subscription.endpoint,
+          p256dh: subscription.toJSON().keys.p256dh,
+          auth: subscription.toJSON().keys.auth,
+        }, { headers: { Authorization: `Bearer ${token}` } });
+
+        console.log('Push subscription saved for user', userId);
+      } catch (err) {
+        console.log('Push subscription failed:', err);
+      }
+    };
+
+    subscribeToPush();
+  }, [token]); // eslint-disable-line
   // MEAL REMINDERS
   useEffect(() => {
     if (!token) return;
@@ -155,6 +251,15 @@ function App() {
     } catch (err) { console.log(err); }
   };
 
+  const fetchBodyFatLogs = async () => {
+    try {
+      const res = await axios.get(`${API}/bodyfat`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setBodyFatLogs(res.data);
+    } catch (err) { console.log(err); }
+  };
+
   const fetchExerciseLogs = async (date) => {
     try {
       const res = await axios.get(`${API}/exercise?date=${date}`, {
@@ -172,6 +277,15 @@ function App() {
         headers: { Authorization: `Bearer ${token}` }
       });
       setWeeklyData(res.data);
+    } catch (err) { console.log(err); }
+  };
+
+  const fetchDailyHistory = async () => {
+    try {
+      const res = await axios.get(`${API}/foodlogs/history?days=30`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setDailyHistory(res.data);
     } catch (err) { console.log(err); }
   };
 
@@ -193,6 +307,45 @@ function App() {
       });
       fetchWeightLogs();
     } catch (err) { console.log(err); }
+  };
+
+  const logBodyFat = async () => {
+    if (!waistInches || !neckInches || (profile.sex === 'female' && !hipInches)) return;
+    try {
+      await axios.post(`${API}/bodyfat`, {
+        sex: profile.sex,
+        heightInches: heightInchesTotal,
+        waistInches: parseFloat(waistInches),
+        neckInches: parseFloat(neckInches),
+        hipInches: profile.sex === 'female' ? parseFloat(hipInches) : null,
+      }, { headers: { Authorization: `Bearer ${token}` } });
+      setWaistInches(''); setNeckInches(''); setHipInches('');
+      fetchBodyFatLogs();
+    } catch (err) { console.log(err); }
+  };
+
+  const deleteBodyFat = async (id) => {
+    try {
+      await axios.delete(`${API}/bodyfat/${id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      fetchBodyFatLogs();
+    } catch (err) { console.log(err); }
+  };
+
+  const getBodyFatCategory = (pct, sex) => {
+    if (sex === 'female') {
+      if (pct < 14) return 'Essential Fat';
+      if (pct < 21) return 'Athletic';
+      if (pct < 25) return 'Fit';
+      if (pct < 32) return 'Average';
+      return 'Above Average';
+    }
+    if (pct < 6) return 'Essential Fat';
+    if (pct < 14) return 'Athletic';
+    if (pct < 18) return 'Fit';
+    if (pct < 25) return 'Average';
+    return 'Above Average';
   };
 
   const logExercise = async () => {
@@ -415,9 +568,22 @@ function App() {
       }, { headers: { Authorization: `Bearer ${token}` } });
       setMessage('✅ ' + food.name.substring(0, 30) + ' logged!');
       setSearchQuery(''); setSearchResults([]);
-      fetchFoodLogs(selectedDate); fetchStreak(); fetchWeeklyData();
+      fetchFoodLogs(selectedDate); fetchStreak(); fetchWeeklyData(); fetchDailyHistory();
       setTimeout(() => fetchFoodLogs(selectedDate), 4000);
       setTimeout(() => setMessage(''), 3000);
+
+      // Check if this food log pushed us past 80%/100% of calorie goal
+      const userId = getUserIdFromToken(token);
+      if (userId) {
+        const newTotal = totalCalories + food.calories;
+        axios.post(`${API}/push/check-threshold`, {
+          userId: userId,
+          totalCalories: newTotal,
+          calorieGoal: dailyGoal,
+        }, { headers: { Authorization: `Bearer ${token}` } }).catch(err => {
+          console.log('Threshold check failed:', err);
+        });
+      }
     } catch (err) { setMessage('❌ Error logging food.'); }
   };
 
@@ -426,7 +592,7 @@ function App() {
       await axios.delete(`${API}/foodlogs/${id}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      fetchFoodLogs(selectedDate); fetchStreak(); fetchWeeklyData();
+      fetchFoodLogs(selectedDate); fetchStreak(); fetchWeeklyData(); fetchDailyHistory();
     } catch (err) { setMessage('❌ Error deleting food.'); }
   };
 
@@ -524,6 +690,133 @@ function App() {
     'What workout should I do today?',
   ];
 
+
+  // --- Supplement functions ---
+  const fetchSupplements = async () => {
+    if (!token) return;
+    try {
+      const res = await axios.get(`${API}/supplements`, { headers: { Authorization: `Bearer ${token}` } });
+      setSupplementLogs(res.data);
+    } catch(e) {}
+  };
+  const logSupplement = async () => {
+    if (!suppName.trim()) return setSuppMsg('Enter supplement name');
+    try {
+      await axios.post(`${API}/supplements`, {
+        supplementName: suppName, dosage: suppDosage, unit: suppUnit, timeOfDay: suppTime
+      }, { headers: { Authorization: `Bearer ${token}` } });
+      setSuppName(''); setSuppDosage(''); setSuppMsg('✅ Logged!');
+      fetchSupplements();
+      setTimeout(() => setSuppMsg(''), 2000);
+    } catch(e) { setSuppMsg('Error logging supplement'); }
+  };
+  const deleteSupplement = async (id) => {
+    await axios.delete(`${API}/supplements/${id}`, { headers: { Authorization: `Bearer ${token}` } });
+    fetchSupplements();
+  };
+
+  // --- Sleep functions ---
+  const fetchSleep = async () => {
+    if (!token) return;
+    try {
+      const res = await axios.get(`${API}/sleep`, { headers: { Authorization: `Bearer ${token}` } });
+      setSleepLogs(res.data);
+    } catch(e) {}
+  };
+  const logSleep = async () => {
+    if (!sleepHours) return setSleepMsg('Enter hours slept');
+    try {
+      await axios.post(`${API}/sleep`, {
+        hoursSlept: parseFloat(sleepHours), quality: sleepQuality,
+        bedtime: sleepBedtime, wakeTime: sleepWakeTime, notes: sleepNotes
+      }, { headers: { Authorization: `Bearer ${token}` } });
+      setSleepHours(''); setSleepBedtime(''); setSleepWakeTime(''); setSleepNotes('');
+      setSleepMsg('✅ Sleep logged!');
+      fetchSleep();
+      setTimeout(() => setSleepMsg(''), 2000);
+    } catch(e) { setSleepMsg('Error logging sleep'); }
+  };
+  const deleteSleep = async (id) => {
+    await axios.delete(`${API}/sleep/${id}`, { headers: { Authorization: `Bearer ${token}` } });
+    fetchSleep();
+  };
+
+  // --- Mood functions ---
+  const fetchMood = async () => {
+    if (!token) return;
+    try {
+      const res = await axios.get(`${API}/mood`, { headers: { Authorization: `Bearer ${token}` } });
+      setMoodLogs(res.data);
+    } catch(e) {}
+  };
+  const logMood = async () => {
+    const labels = ['', 'Awful', 'Bad', 'Meh', 'Okay', 'Fine', 'Good', 'Great', 'Amazing', 'Fantastic', 'Perfect'];
+    try {
+      await axios.post(`${API}/mood`, {
+        moodScore, moodLabel: labels[moodScore] || 'Good',
+        energyLevel: moodEnergy, stressLevel: moodStress, notes: moodNotes
+      }, { headers: { Authorization: `Bearer ${token}` } });
+      setMoodNotes(''); setMoodMsg('✅ Mood logged!');
+      fetchMood();
+      setTimeout(() => setMoodMsg(''), 2000);
+    } catch(e) { setMoodMsg('Error logging mood'); }
+  };
+  const deleteMood = async (id) => {
+    await axios.delete(`${API}/mood/${id}`, { headers: { Authorization: `Bearer ${token}` } });
+    fetchMood();
+  };
+
+  // --- Custom Food functions ---
+  const fetchCustomFoods = async () => {
+    if (!token) return;
+    try {
+      const res = await axios.get(`${API}/custom-foods`, { headers: { Authorization: `Bearer ${token}` } });
+      setCustomFoods(res.data);
+    } catch(e) {}
+  };
+  const saveCustomFood = async () => {
+    if (!customFoodName.trim() || !customFoodCal) return setCustomFoodMsg('Enter name and calories');
+    try {
+      await axios.post(`${API}/custom-foods`, {
+        foodName: customFoodName, calories: parseFloat(customFoodCal),
+        protein: parseFloat(customFoodProtein) || 0,
+        carbs: parseFloat(customFoodCarbs) || 0,
+        fat: parseFloat(customFoodFat) || 0,
+        servingSize: parseFloat(customFoodServing) || 100,
+        servingUnit: customFoodUnit
+      }, { headers: { Authorization: `Bearer ${token}` } });
+      setCustomFoodName(''); setCustomFoodCal(''); setCustomFoodProtein('');
+      setCustomFoodCarbs(''); setCustomFoodFat('');
+      setCustomFoodMsg('✅ Saved!'); setShowCustomForm(false);
+      fetchCustomFoods();
+      setTimeout(() => setCustomFoodMsg(''), 2000);
+    } catch(e) { setCustomFoodMsg('Error saving food'); }
+  };
+  const logCustomFood = async (cf) => {
+    try {
+      await axios.post(`${API}/custom-foods/${cf.id}/log`, { mealType },
+        { headers: { Authorization: `Bearer ${token}` } });
+      setMessage(`✅ ${cf.foodName} logged!`);
+      fetchFoodLogs(selectedDate);
+      setTimeout(() => setMessage(''), 2000);
+    } catch(e) {}
+  };
+  const deleteCustomFood = async (id) => {
+    await axios.delete(`${API}/custom-foods/${id}`, { headers: { Authorization: `Bearer ${token}` } });
+    fetchCustomFoods();
+  };
+
+
+  useEffect(() => {
+    if (token) {
+      fetchSupplements();
+      fetchSleep();
+      fetchMood();
+      fetchCustomFoods();
+    }
+  // eslint-disable-next-line
+  }, [token]);
+
   if (!token) {
     return (
       <div className="auth-page">
@@ -603,7 +896,11 @@ function App() {
           { id: 'exercise', icon: 'ti-run', label: 'Activity', badge: exerciseLogs.length > 0 ? exerciseLogs.length : null },
           { id: 'progress', icon: 'ti-chart-bar', label: 'Progress' },
           { id: 'achievements', icon: 'ti-trophy', label: 'Achievements', badge: unlockedCount > 0 ? `${unlockedCount}` : null },
+          { id: 'bodyfat', icon: 'ti-ruler', label: 'Body Fat' },
           { id: 'coach', icon: 'ti-robot', label: 'AI Coach' },
+          { id: 'sleep', icon: 'ti-moon', label: 'Sleep' },
+          { id: 'mood', icon: 'ti-mood-happy', label: 'Mood' },
+          { id: 'supplements', icon: 'ti-pill', label: 'Supplements' },
         ].map(item => (
           <div key={item.id} className={`nav-item ${activeTab === item.id ? 'active' : ''}`}
             onClick={() => setActiveTab(item.id)}>
@@ -866,6 +1163,61 @@ function App() {
                 </div>
               )}
             </div>
+
+            {/* CUSTOM FOODS */}
+            <div className="log-card" style={{marginTop:'16px'}}>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'12px'}}>
+                <div>
+                  <h3 className="log-title" style={{marginBottom:'2px'}}>My Custom Foods</h3>
+                  <p className="log-sub">Foods you created with your own macros</p>
+                </div>
+                <button className="search-btn" style={{padding:'8px 14px',fontSize:'12px'}}
+                  onClick={() => setShowCustomForm(!showCustomForm)}>+ Create</button>
+              </div>
+              {customFoodMsg && <div className="log-message">{customFoodMsg}</div>}
+              {showCustomForm && (
+                <div style={{background:'#F7F7FA',borderRadius:'12px',padding:'14px',marginBottom:'14px',border:'.5px solid #EBEBF0'}}>
+                  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'8px',marginBottom:'8px'}}>
+                    <input className="search-input" placeholder="Food name *" value={customFoodName} onChange={e=>setCustomFoodName(e.target.value)} style={{gridColumn:'1/-1'}}/>
+                    <input type="number" className="search-input" placeholder="Calories *" value={customFoodCal} onChange={e=>setCustomFoodCal(e.target.value)}/>
+                    <input type="number" className="search-input" placeholder="Protein (g)" value={customFoodProtein} onChange={e=>setCustomFoodProtein(e.target.value)}/>
+                    <input type="number" className="search-input" placeholder="Carbs (g)" value={customFoodCarbs} onChange={e=>setCustomFoodCarbs(e.target.value)}/>
+                    <input type="number" className="search-input" placeholder="Fat (g)" value={customFoodFat} onChange={e=>setCustomFoodFat(e.target.value)}/>
+                    <input type="number" className="search-input" placeholder="Serving size" value={customFoodServing} onChange={e=>setCustomFoodServing(e.target.value)}/>
+                  </div>
+                  <div style={{display:'flex',gap:'8px'}}>
+                    {['g','oz','ml','cup','tbsp','serving'].map(u=>(
+                      <button key={u} onClick={()=>setCustomFoodUnit(u)}
+                        style={{padding:'4px 10px',borderRadius:'8px',border:'.5px solid #DDDDE4',background:customFoodUnit===u?'#5B4FD4':'#fff',color:customFoodUnit===u?'#fff':'#555',fontSize:'11px',cursor:'pointer',fontWeight:customFoodUnit===u?'600':'400'}}>
+                        {u}
+                      </button>
+                    ))}
+                  </div>
+                  <button className="log-btn" style={{marginTop:'10px',width:'100%',padding:'10px'}} onClick={saveCustomFood}>Save Custom Food</button>
+                </div>
+              )}
+              {customFoods.length === 0 ? (
+                <div className="empty-state"><span>🍱</span><p>No custom foods yet. Create one above!</p></div>
+              ) : (
+                <div className="search-results">
+                  {customFoods.map(cf => (
+                    <div key={cf.id} className="result-item">
+                      <div className="result-left">
+                        <p className="result-name">{cf.foodName}</p>
+                        <p className="result-macros">{cf.calories} cal · {cf.protein}g P · {cf.carbs}g C · {cf.fat}g F · per {cf.servingSize}{cf.servingUnit}</p>
+                      </div>
+                      <div style={{display:'flex',gap:'6px'}}>
+                        <button className="log-btn" onClick={()=>logCustomFood(cf)}>+ Log</button>
+                        <button onClick={()=>deleteCustomFood(cf.id)}
+                          style={{background:'transparent',border:'none',cursor:'pointer',fontSize:'14px',color:'#ccc'}}
+                          onMouseOver={e=>e.target.style.color='#E85A5A'}
+                          onMouseOut={e=>e.target.style.color='#ccc'}>🗑️</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         )}
 
@@ -936,6 +1288,32 @@ function App() {
                 <div className="progress-stat"><span className="progress-stat-num">{totalProtein}g</span><span className="progress-stat-label">Total Protein</span></div>
                 <div className="progress-stat"><span className="progress-stat-num">🔥{streak}</span><span className="progress-stat-label">Day Streak</span></div>
               </div>
+            </div>
+
+            {/* DAILY CALORIE HISTORY - LAST 30 DAYS */}
+            <div className="progress-card">
+              <h3>📊 Daily Calorie History</h3>
+              <p style={{fontSize:'12px',color:'#9898AA',marginBottom:'16px'}}>Last 30 days of calorie intake</p>
+              {dailyHistory.length === 0 ? (
+                <div className="empty-state">
+                  <span>📊</span>
+                  <p>Log some food to see your calorie history</p>
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height={220}>
+                  <LineChart data={dailyHistory}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#F0F0F4" vertical={false}/>
+                    <XAxis dataKey="day" tick={{fontSize:10,fill:'#9898AA'}} axisLine={false} tickLine={false}
+                      interval={Math.max(0, Math.floor(dailyHistory.length / 8))}/>
+                    <YAxis tick={{fontSize:11,fill:'#9898AA'}} axisLine={false} tickLine={false}/>
+                    <Tooltip {...tooltipStyle}
+                      formatter={(value, name) => [`${value} cal`, 'Calories']}
+                      labelFormatter={(label, payload) => payload && payload[0] ? payload[0].payload.date : label}/>
+                    <Line type="monotone" dataKey="calories" stroke="#5B4FD4" strokeWidth={2.5}
+                      dot={{fill:'#5B4FD4',strokeWidth:0,r:2}} activeDot={{r:5}} name="Calories"/>
+                  </LineChart>
+                </ResponsiveContainer>
+              )}
             </div>
 
             {/* MACRO PIE CHART */}
@@ -1111,6 +1489,62 @@ function App() {
           </div>
         )}
 
+        {/* BODY FAT */}
+        {activeTab === 'bodyfat' && (
+          <div className="tab-content">
+            <div className="log-card">
+              <h3 className="log-title">📏 Body Fat Calculator</h3>
+              <p className="log-sub">Uses the U.S. Navy method — just a tape measure, no photos needed or stored.</p>
+              <div className="profile-grid">
+                <div className="profile-field"><label>Waist (inches)</label>
+                  <input type="number" className="profile-input" placeholder="e.g. 34"
+                    value={waistInches} onChange={e => setWaistInches(e.target.value)}/></div>
+                <div className="profile-field"><label>Neck (inches)</label>
+                  <input type="number" className="profile-input" placeholder="e.g. 15"
+                    value={neckInches} onChange={e => setNeckInches(e.target.value)}/></div>
+                {profile.sex === 'female' && (
+                  <div className="profile-field"><label>Hip (inches)</label>
+                    <input type="number" className="profile-input" placeholder="e.g. 38"
+                      value={hipInches} onChange={e => setHipInches(e.target.value)}/></div>
+                )}
+              </div>
+              <button className="profile-save-btn" onClick={logBodyFat}>Calculate & Log</button>
+            </div>
+
+            {bodyFatLogs.length > 0 && (
+              <div className="progress-card">
+                <h3>Latest Reading</h3>
+                <div style={{textAlign:'center',padding:'12px 0'}}>
+                  <div style={{fontSize:'40px',fontWeight:'700',color:'#5B4FD4'}}>{bodyFatLogs[0].bodyFatPercent}%</div>
+                  <div style={{fontSize:'13px',color:'#9898AA',marginTop:'4px'}}>
+                    {getBodyFatCategory(bodyFatLogs[0].bodyFatPercent, profile.sex)}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="progress-card">
+              <h3>History</h3>
+              {bodyFatLogs.length === 0 ? (
+                <div className="empty-state"><span>📏</span><p>No body fat readings yet</p></div>
+              ) : (
+                <div className="weight-list">
+                  {bodyFatLogs.map(b => (
+                    <div key={b.id} className="weight-item">
+                      <span className="weight-date">{new Date(b.date).toLocaleDateString('en-US',{month:'short',day:'numeric'})}</span>
+                      <span className="weight-val">{b.bodyFatPercent}%</span>
+                      <button onClick={() => deleteBodyFat(b.id)}
+                        style={{background:'transparent',border:'none',color:'#E4E4EC',cursor:'pointer',fontSize:'14px'}}
+                        onMouseOver={e=>e.target.style.color='#E85A5A'}
+                        onMouseOut={e=>e.target.style.color='#E4E4EC'}>🗑️</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* AI COACH */}
         {activeTab === 'coach' && (
           <div className="tab-content">
@@ -1244,6 +1678,231 @@ function App() {
             </div>
           </div>
         )}
+
+        {/* SLEEP TRACKER */}
+        {activeTab === 'sleep' && (
+          <div className="tab-content">
+            <div className="log-card">
+              <h3 className="log-title">😴 Sleep Tracker</h3>
+              <p className="log-sub">Track your sleep quality and patterns for better recovery</p>
+              <div className="profile-grid">
+                <div className="profile-field"><label>Hours Slept *</label>
+                  <input type="number" step="0.5" className="profile-input" placeholder="e.g. 7.5"
+                    value={sleepHours} onChange={e=>setSleepHours(e.target.value)}/></div>
+                <div className="profile-field"><label>Bedtime</label>
+                  <input type="time" className="profile-input"
+                    value={sleepBedtime} onChange={e=>setSleepBedtime(e.target.value)}/></div>
+                <div className="profile-field"><label>Wake Time</label>
+                  <input type="time" className="profile-input"
+                    value={sleepWakeTime} onChange={e=>setSleepWakeTime(e.target.value)}/></div>
+              </div>
+              <div className="profile-field-full" style={{marginTop:'8px'}}><label>Sleep Quality</label>
+                <div className="profile-options" style={{flexWrap:'wrap'}}>
+                  {[{val:'poor',label:'😣 Poor'},{val:'fair',label:'😐 Fair'},{val:'good',label:'😊 Good'},{val:'great',label:'😴 Great'},{val:'excellent',label:'⭐ Excellent'}].map(q=>(
+                    <button key={q.val} className={`profile-option ${sleepQuality===q.val?'profile-option-active':''}`}
+                      onClick={()=>setSleepQuality(q.val)}>{q.label}</button>
+                  ))}
+                </div>
+              </div>
+              <div className="profile-field-full" style={{marginTop:'8px'}}><label>Notes (optional)</label>
+                <input className="search-input" placeholder="Anything that affected your sleep?"
+                  value={sleepNotes} onChange={e=>setSleepNotes(e.target.value)}/></div>
+              {sleepMsg && <div className="log-message">{sleepMsg}</div>}
+              <button className="profile-save-btn" onClick={logSleep}>Log Sleep</button>
+            </div>
+            {sleepLogs.length > 0 && (
+              <div className="progress-card">
+                <h3>😴 Sleep History</h3>
+                <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'10px',marginBottom:'16px'}}>
+                  <div style={{textAlign:'center',padding:'12px',background:'#F0EFFD',borderRadius:'12px'}}>
+                    <div style={{fontSize:'22px',fontWeight:'700',color:'#5B4FD4'}}>{(sleepLogs.slice(0,7).reduce((s,l)=>s+l.hoursSlept,0)/Math.min(sleepLogs.length,7)).toFixed(1)}</div>
+                    <div style={{fontSize:'11px',color:'#9898AA',marginTop:'2px'}}>Avg Hours</div>
+                  </div>
+                  <div style={{textAlign:'center',padding:'12px',background:'#EDFAF5',borderRadius:'12px'}}>
+                    <div style={{fontSize:'22px',fontWeight:'700',color:'#1D9E75'}}>{sleepLogs.length}</div>
+                    <div style={{fontSize:'11px',color:'#9898AA',marginTop:'2px'}}>Days Logged</div>
+                  </div>
+                  <div style={{textAlign:'center',padding:'12px',background:'#FEF4E8',borderRadius:'12px'}}>
+                    <div style={{fontSize:'22px',fontWeight:'700',color:'#E8820C'}}>{sleepLogs[0]?.hoursSlept}h</div>
+                    <div style={{fontSize:'11px',color:'#9898AA',marginTop:'2px'}}>Last Night</div>
+                  </div>
+                </div>
+                <div className="weight-list">
+                  {sleepLogs.slice(0,10).map(s => (
+                    <div key={s.id} className="weight-item">
+                      <div>
+                        <div style={{fontSize:'13px',fontWeight:'600'}}>{s.hoursSlept}h · {s.quality}</div>
+                        <div style={{fontSize:'11px',color:'#9898AA',marginTop:'2px'}}>
+                          {new Date(s.date).toLocaleDateString('en-US',{month:'short',day:'numeric'})}
+                          {s.bedtime && ` · ${s.bedtime}–${s.wakeTime}`}
+                        </div>
+                      </div>
+                      <div style={{display:'flex',alignItems:'center',gap:'10px'}}>
+                        <span style={{fontSize:'12px',color:s.hoursSlept>=7?'#1D9E75':'#E8820C',fontWeight:'600',background:s.hoursSlept>=7?'#EDFAF5':'#FEF4E8',padding:'2px 8px',borderRadius:'20px'}}>
+                          {s.hoursSlept>=7?'✅ Good':'⚠️ Short'}
+                        </span>
+                        <button onClick={()=>deleteSleep(s.id)}
+                          style={{background:'transparent',border:'none',cursor:'pointer',fontSize:'14px',color:'#ccc'}}
+                          onMouseOver={e=>e.target.style.color='#E85A5A'}
+                          onMouseOut={e=>e.target.style.color='#ccc'}>🗑️</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* MOOD TRACKER */}
+        {activeTab === 'mood' && (
+          <div className="tab-content">
+            <div className="log-card">
+              <h3 className="log-title">😊 Mood Tracker</h3>
+              <p className="log-sub">Track your emotional wellbeing alongside your physical health</p>
+              <div style={{marginBottom:'16px'}}>
+                <label style={{fontSize:'12px',fontWeight:'600',color:'#555',display:'block',marginBottom:'10px'}}>How are you feeling today? ({moodScore}/10)</label>
+                <div style={{display:'flex',alignItems:'center',gap:'12px'}}>
+                  <span style={{fontSize:'28px'}}>{['','😭','😢','😟','😕','😐','🙂','😊','😄','🤩','🥳'][moodScore]}</span>
+                  <input type="range" min="1" max="10" value={moodScore}
+                    onChange={e=>setMoodScore(parseInt(e.target.value))}
+                    style={{flex:1,accentColor:'#5B4FD4',height:'6px',cursor:'pointer'}}/>
+                  <span style={{fontSize:'16px',fontWeight:'700',color:'#5B4FD4',minWidth:'20px'}}>{moodScore}</span>
+                </div>
+              </div>
+              <div className="profile-field-full"><label>Energy Level</label>
+                <div className="profile-options">
+                  {[{val:'low',label:'🪫 Low'},{val:'medium',label:'⚡ Medium'},{val:'high',label:'🔋 High'},{val:'very_high',label:'🚀 Very High'}].map(e=>(
+                    <button key={e.val} className={`profile-option ${moodEnergy===e.val?'profile-option-active':''}`}
+                      onClick={()=>setMoodEnergy(e.val)}>{e.label}</button>
+                  ))}
+                </div>
+              </div>
+              <div className="profile-field-full" style={{marginTop:'8px'}}><label>Stress Level</label>
+                <div className="profile-options">
+                  {[{val:'low',label:'😌 Low'},{val:'moderate',label:'😤 Moderate'},{val:'high',label:'😰 High'},{val:'very_high',label:'🤯 Very High'}].map(s=>(
+                    <button key={s.val} className={`profile-option ${moodStress===s.val?'profile-option-active':''}`}
+                      onClick={()=>setMoodStress(s.val)}>{s.label}</button>
+                  ))}
+                </div>
+              </div>
+              <div className="profile-field-full" style={{marginTop:'8px'}}><label>Notes (optional)</label>
+                <input className="search-input" placeholder="What's on your mind?"
+                  value={moodNotes} onChange={e=>setMoodNotes(e.target.value)}/></div>
+              {moodMsg && <div className="log-message">{moodMsg}</div>}
+              <button className="profile-save-btn" onClick={logMood}>Log Mood</button>
+            </div>
+            {moodLogs.length > 0 && (
+              <div className="progress-card">
+                <h3>📈 Mood History</h3>
+                <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'10px',marginBottom:'16px'}}>
+                  <div style={{textAlign:'center',padding:'12px',background:'#F0EFFD',borderRadius:'12px'}}>
+                    <div style={{fontSize:'22px',fontWeight:'700',color:'#5B4FD4'}}>{(moodLogs.slice(0,7).reduce((s,m)=>s+m.moodScore,0)/Math.min(moodLogs.length,7)).toFixed(1)}</div>
+                    <div style={{fontSize:'11px',color:'#9898AA',marginTop:'2px'}}>Avg Mood</div>
+                  </div>
+                  <div style={{textAlign:'center',padding:'12px',background:'#EDFAF5',borderRadius:'12px'}}>
+                    <div style={{fontSize:'28px'}}>{['','😭','😢','😟','😕','😐','🙂','😊','😄','🤩','🥳'][moodLogs[0]?.moodScore||5]}</div>
+                    <div style={{fontSize:'11px',color:'#9898AA',marginTop:'2px'}}>Latest</div>
+                  </div>
+                  <div style={{textAlign:'center',padding:'12px',background:'#FEF4E8',borderRadius:'12px'}}>
+                    <div style={{fontSize:'22px',fontWeight:'700',color:'#E8820C'}}>{moodLogs.length}</div>
+                    <div style={{fontSize:'11px',color:'#9898AA',marginTop:'2px'}}>Days Logged</div>
+                  </div>
+                </div>
+                <div className="weight-list">
+                  {moodLogs.slice(0,10).map(m => (
+                    <div key={m.id} className="weight-item">
+                      <div>
+                        <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
+                          <span style={{fontSize:'20px'}}>{['','😭','😢','😟','😕','😐','🙂','😊','😄','🤩','🥳'][m.moodScore]}</span>
+                          <span style={{fontSize:'13px',fontWeight:'600'}}>{m.moodLabel} ({m.moodScore}/10)</span>
+                        </div>
+                        <div style={{fontSize:'11px',color:'#9898AA',marginTop:'3px'}}>
+                          {new Date(m.date).toLocaleDateString('en-US',{month:'short',day:'numeric'})} · Energy: {m.energyLevel} · Stress: {m.stressLevel}
+                        </div>
+                        {m.notes && <div style={{fontSize:'11px',color:'#555',marginTop:'2px',fontStyle:'italic'}}>"{m.notes}"</div>}
+                      </div>
+                      <button onClick={()=>deleteMood(m.id)}
+                        style={{background:'transparent',border:'none',cursor:'pointer',fontSize:'14px',color:'#ccc'}}
+                        onMouseOver={e=>e.target.style.color='#E85A5A'}
+                        onMouseOut={e=>e.target.style.color='#ccc'}>🗑️</button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* SUPPLEMENT TRACKER */}
+        {activeTab === 'supplements' && (
+          <div className="tab-content">
+            <div className="log-card">
+              <h3 className="log-title">💊 Supplement Tracker</h3>
+              <p className="log-sub">Track your vitamins, minerals and supplements</p>
+              <div className="profile-grid">
+                <div className="profile-field" style={{gridColumn:'1/-1'}}><label>Supplement Name *</label>
+                  <input className="profile-input" placeholder="e.g. Vitamin D, Creatine, Whey Protein..."
+                    value={suppName} onChange={e=>setSuppName(e.target.value)}/></div>
+                <div className="profile-field"><label>Dosage</label>
+                  <input type="number" className="profile-input" placeholder="e.g. 500"
+                    value={suppDosage} onChange={e=>setSuppDosage(e.target.value)}/></div>
+                <div className="profile-field"><label>Unit</label>
+                  <select className="profile-input" value={suppUnit} onChange={e=>setSuppUnit(e.target.value)}>
+                    {['mg','g','mcg','IU','ml','oz','serving','capsule','tablet','scoop'].map(u=>(
+                      <option key={u} value={u}>{u}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="profile-field-full" style={{marginTop:'8px'}}><label>Time of Day</label>
+                <div className="profile-options">
+                  {[{val:'morning',label:'🌅 Morning'},{val:'pre_workout',label:'🏋️ Pre-Workout'},{val:'post_workout',label:'💪 Post-Workout'},{val:'evening',label:'🌙 Evening'},{val:'with_meal',label:'🍽️ With Meal'}].map(t=>(
+                    <button key={t.val} className={`profile-option ${suppTime===t.val?'profile-option-active':''}`}
+                      onClick={()=>setSuppTime(t.val)}>{t.label}</button>
+                  ))}
+                </div>
+              </div>
+              {suppMsg && <div className="log-message">{suppMsg}</div>}
+              <button className="profile-save-btn" onClick={logSupplement}>Log Supplement</button>
+            </div>
+            {supplementLogs.length > 0 && (
+              <div className="progress-card">
+                <h3>💊 Today's Supplements</h3>
+                <p style={{fontSize:'12px',color:'#9898AA',marginBottom:'12px'}}>
+                  {supplementLogs.filter(s=>s.date===new Date().toISOString().split('T')[0]).length} taken today
+                </p>
+                <div className="weight-list">
+                  {supplementLogs.slice(0,20).map(s => (
+                    <div key={s.id} className="weight-item">
+                      <div>
+                        <div style={{fontSize:'13px',fontWeight:'600'}}>{s.supplementName}</div>
+                        <div style={{fontSize:'11px',color:'#9898AA',marginTop:'2px'}}>
+                          {s.dosage}{s.unit} · {s.timeOfDay?.replace('_',' ')} · {new Date(s.date).toLocaleDateString('en-US',{month:'short',day:'numeric'})}
+                        </div>
+                      </div>
+                      <div style={{display:'flex',alignItems:'center',gap:'10px'}}>
+                        <span style={{fontSize:'11px',fontWeight:'600',color:'#5B4FD4',background:'#F0EFFD',padding:'2px 8px',borderRadius:'20px'}}>
+                          ✓ Logged
+                        </span>
+                        <button onClick={()=>deleteSupplement(s.id)}
+                          style={{background:'transparent',border:'none',cursor:'pointer',fontSize:'14px',color:'#ccc'}}
+                          onMouseOver={e=>e.target.style.color='#E85A5A'}
+                          onMouseOut={e=>e.target.style.color='#ccc'}>🗑️</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {supplementLogs.length === 0 && (
+              <div className="progress-card">
+                <div className="empty-state"><span>💊</span><p>No supplements logged yet</p></div>
+              </div>
+            )}
+          </div>
+        )}
+
       </main>
 
       <div className="bottomnav">
@@ -1253,7 +1912,11 @@ function App() {
           {id:'exercise',icon:'💪',label:'Activity'},
           {id:'progress',icon:'📊',label:'Progress'},
           {id:'achievements',icon:'🏆',label:'Awards'},
+          {id:'bodyfat',icon:'📏',label:'Body Fat'},
           {id:'coach',icon:'🤖',label:'Coach'},
+          {id:'sleep',icon:'😴',label:'Sleep'},
+          {id:'mood',icon:'😊',label:'Mood'},
+          {id:'supplements',icon:'💊',label:'Supplements'},
         ].map(item=>(
           <button key={item.id} className={`bottomnav-btn ${activeTab===item.id?'bottomnav-active':''}`}
             onClick={()=>setActiveTab(item.id)}>
@@ -1265,5 +1928,10 @@ function App() {
     </div>
   );
 }
-
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = window.atob(base64);
+  return Uint8Array.from([...rawData].map(char => char.charCodeAt(0)));
+}
 export default App;
