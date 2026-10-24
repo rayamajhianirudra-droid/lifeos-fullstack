@@ -99,6 +99,7 @@ function App() {
 
   // --- Notifications ---
   const [showNotifDropdown, setShowNotifDropdown] = useState(false);
+  const [chartRange, setChartRange] = useState('7d');
 
   const calculateDailyGoal = (p) => {
     const weightKg = p.weightLbs * 0.453592;
