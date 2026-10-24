@@ -21,7 +21,7 @@ public class StreaksController {
     @Autowired private DataSource dataSource;
 
     private Long getUserId(String auth) {
-        return jwtService.extractUserId(auth.replace("Bearer ", ""));
+        return jwtService.extractEmail(auth.replace("Bearer ", ""));
     }
 
     /** Compute streak from a sorted (desc) list of dates */

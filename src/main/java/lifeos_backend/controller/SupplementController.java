@@ -20,7 +20,7 @@ public class SupplementController {
     @Autowired private JwtService jwtService;
 
     private Long getUserId(String auth) {
-        return jwtService.extractUserId(auth.replace("Bearer ", ""));
+        return jwtService.extractEmail(auth.replace("Bearer ", ""));
     }
 
     @GetMapping
