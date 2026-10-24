@@ -635,7 +635,6 @@ function App() {
     const hasBreakfast = foodLogs.some(f => f.mealType === 'breakfast');
     const hasLunch = foodLogs.some(f => f.mealType === 'lunch');
     const hasDinner = foodLogs.some(f => f.mealType === 'dinner');
-    const hasSnack = foodLogs.some(f => f.mealType === 'snack');
     const todayExercise = exerciseLogs.length > 0;
     const calorieRemaining = dailyGoal - totalCalories + totalBurned;
     const proteinRemaining = proteinGoal - totalProtein;
@@ -1009,7 +1008,7 @@ function App() {
               </div>
               <div className="streak-dots">
                 {[...Array(7)].map((_, i) => (
-                  <div key={i} className={`streak-dot ${i >= Math.min(streak, 7) ? 'off' : ''}`} title={i < streak ? `Day ${i + 1} ✓` : `Day ${i + 1}`}/>
+                  <div key={i} className={`streak-dot ${i >= streak ? 'off' : ''}`} title={i < streak ? `Day ${i + 1} ✓` : `Day ${i + 1}`}/>
                 ))}
               </div>
             </div>
@@ -1095,7 +1094,44 @@ function App() {
         {/* DASHBOARD */}
         {activeTab === 'dashboard' && (
           <div className="tab-content">
-            {streak > 0 && (
+
+            {/* HERO SECTION */}
+            <div className="dash-hero">
+              <div className="hero-top">
+                <div>
+                  <div className="hero-greeting">Good {new Date().getHours() < 12 ? 'Morning' : new Date().getHours() < 17 ? 'Afternoon' : 'Evening'}</div>
+                  <div className="hero-name">{profile?.firstName || 'there'} 👋</div>
+                  <div className="hero-date">{formatDateLabel(selectedDate)}</div>
+                </div>
+                <div className="hero-score-ring">
+                  <svg width="58" height="58" viewBox="0 0 58 58">
+                    <circle cx="29" cy="29" r="24" fill="none" stroke="rgba(255,255,255,.2)" strokeWidth="6"/>
+                    <circle cx="29" cy="29" r="24" fill="none" stroke="#fff" strokeWidth="6"
+                      strokeDasharray={`${Math.min(healthScore, 100) * 1.508} 150.8`}
+                      strokeLinecap="round" transform="rotate(-90 29 29)"
+                      style={{transition:'stroke-dasharray .8s ease'}}/>
+                    <text x="29" y="33" textAnchor="middle" fill="#fff" fontSize="13" fontWeight="700">{healthScore}</text>
+                  </svg>
+                  <div className="hero-score-label">Score</div>
+                </div>
+              </div>
+              <div className="hero-stats-row">
+                <div className="hero-stat">
+                  <div className="hero-stat-val">{totalCalories}</div>
+                  <div className="hero-stat-label">Calories Eaten</div>
+                </div>
+                <div className="hero-stat">
+                  <div className="hero-stat-val">{Math.round(caloriePercent)}%</div>
+                  <div className="hero-stat-label">Goal Reached</div>
+                </div>
+                <div className="hero-stat">
+                  <div className="hero-stat-val">{streak > 0 ? `🔥 ${streak}` : '—'}</div>
+                  <div className="hero-stat-label">Day Streak</div>
+                </div>
+              </div>
+            </div>
+
+            {streak >= 3 && (
               <div className="streak-banner">
                 <span className="streak-fire">🔥</span>
                 <span className="streak-num">{streak}</span>
@@ -1105,6 +1141,23 @@ function App() {
                 {streak >= 3 && streak < 7 && <span className="streak-badge">🌱 On a Roll</span>}
               </div>
             )}
+
+            {/* QUICK ACTIONS */}
+            <div className="quick-actions">
+              <button className="quick-action-btn" onClick={() => setActiveTab('log')}>
+                <span className="quick-action-icon">🍽️</span>
+                <span className="quick-action-label">Log Food</span>
+              </button>
+              <button className="quick-action-btn" onClick={() => setActiveTab('exercise')}>
+                <span className="quick-action-icon">💪</span>
+                <span className="quick-action-label">Log Exercise</span>
+              </button>
+              <button className="quick-action-btn" onClick={() => setActiveTab('coach')}>
+                <span className="quick-action-icon">🤖</span>
+                <span className="quick-action-label">AI Coach</span>
+              </button>
+            </div>
+
             <div className="date-nav">
               <button className="date-nav-btn" onClick={() => changeDate(-1)}>‹</button>
               <div className="date-nav-center">
@@ -1189,6 +1242,9 @@ function App() {
                 <span className="water-title">💧 Hydration</span>
                 <span className="water-count">{water} / 8 glasses</span>
               </div>
+              <div className="water-progress">
+                <div className="water-progress-fill" style={{width:`${Math.min(water/8*100,100)}%`}}/>
+              </div>
               <div className="water-glasses">
                 {[...Array(8)].map((_,i) => (
                   <button key={i} className={`glass ${i < water ? 'glass-full' : ''}`}
@@ -1215,6 +1271,28 @@ function App() {
                 ))}
               </div>
             )}
+            {/* WELLNESS STRIP */}
+            <div className="wellness-strip">
+              <div className="wellness-tile" onClick={() => setActiveTab('sleep')}>
+                <span className="wellness-tile-icon">😴</span>
+                <div className="wellness-tile-val">{sleepLogs && sleepLogs.length > 0 ? sleepLogs[0]?.hoursSlept || '—' : '—'}</div>
+                <div className="wellness-tile-label">Hrs Sleep</div>
+                <div className="wellness-tile-bar"><div className="wellness-tile-fill" style={{width:`${Math.min(((sleepLogs && sleepLogs.length > 0 ? sleepLogs[0]?.hoursSlept : 0)/8)*100,100)}%`,background:'#7C5CFC'}}/></div>
+              </div>
+              <div className="wellness-tile" onClick={() => setActiveTab('mood')}>
+                <span className="wellness-tile-icon">😊</span>
+                <div className="wellness-tile-val">{moodLogs && moodLogs.length > 0 ? moodLogs[0]?.mood || '—' : '—'}</div>
+                <div className="wellness-tile-label">Today's Mood</div>
+                <div className="wellness-tile-bar"><div className="wellness-tile-fill" style={{width:'80%',background:'#1D9E75'}}/></div>
+              </div>
+              <div className="wellness-tile" onClick={() => setActiveTab('activity')}>
+                <span className="wellness-tile-icon">🔥</span>
+                <div className="wellness-tile-val">{totalBurned}</div>
+                <div className="wellness-tile-label">Cal Burned</div>
+                <div className="wellness-tile-bar"><div className="wellness-tile-fill" style={{width:`${Math.min((totalBurned/500)*100,100)}%`,background:'#E8820C'}}/></div>
+              </div>
+            </div>
+
             <div className="foodlog-card">
               <div className="foodlog-header">
                 <h3 className="foodlog-title">{formatDateLabel(selectedDate)}'s Food Log</h3>
