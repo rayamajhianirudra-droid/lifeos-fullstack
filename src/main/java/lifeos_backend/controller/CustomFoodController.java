@@ -1,10 +1,10 @@
 package lifeos_backend.controller;
 
 import lifeos_backend.model.CustomFood;
-import com.lifeos.lifeos_backend.model.FoodLog;
+import lifeos_backend.model.FoodLog;
 import lifeos_backend.repository.CustomFoodRepository;
-import com.lifeos.lifeos_backend.repository.FoodLogRepository;
-import com.lifeos.lifeos_backend.service.JwtService;
+import lifeos_backend.repository.FoodLogRepository;
+import lifeos_backend.service.JwtService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;

@@ -1,8 +1,8 @@
-package com.lifeos.lifeos_backend.controller;
+package lifeos_backend.controller;
 
-import com.lifeos.lifeos_backend.model.User;
-import com.lifeos.lifeos_backend.repository.UserRepository;
-import com.lifeos.lifeos_backend.service.JwtService;
+import lifeos_backend.model.User;
+import lifeos_backend.repository.UserRepository;
+import lifeos_backend.service.JwtService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;

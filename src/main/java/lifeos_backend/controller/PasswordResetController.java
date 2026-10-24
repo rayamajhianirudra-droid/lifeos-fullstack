@@ -1,7 +1,7 @@
 package lifeos_backend.controller;
 
-import com.lifeos.lifeos_backend.model.User;
-import com.lifeos.lifeos_backend.repository.UserRepository;
+import lifeos_backend.model.User;
+import lifeos_backend.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;

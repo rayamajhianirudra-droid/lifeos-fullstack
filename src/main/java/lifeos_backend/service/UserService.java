@@ -1,7 +1,7 @@
-package com.lifeos.lifeos_backend.service;
+package lifeos_backend.service;
 
-import com.lifeos.lifeos_backend.model.User;
-import com.lifeos.lifeos_backend.repository.UserRepository;
+import lifeos_backend.model.User;
+import lifeos_backend.repository.UserRepository;
 import org.springframework.stereotype.Service;
 import java.util.List;
 import java.util.Optional;
