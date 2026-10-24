@@ -761,13 +761,7 @@ function App() {
   ];
   const pieColors = ['#5B4FD4', '#1D9E75', '#E8820C'];
 
-  const quickPrompts = [
-    'What should I eat for dinner?',
-    'Am I on track today?',
-    'How can I improve my health score?',
-    'Is my BMI healthy?',
-    'What workout should I do today?',
-  ];
+
 
 
   // --- Supplement functions ---
