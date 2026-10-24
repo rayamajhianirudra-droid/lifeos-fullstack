@@ -113,6 +113,9 @@ function App() {
   // --- Calorie Dashboard ---
   const [showCalorieDash, setShowCalorieDash] = useState(false);
 
+  // --- Streaks & Consistency ---
+  const [streakData, setStreakData] = useState(null);
+
   const calculateDailyGoal = (p) => {
     const weightKg = p.weightLbs * 0.453592;
     const heightCm = (p.heightFeet * 30.48) + (p.heightInches * 2.54);
@@ -146,6 +149,7 @@ function App() {
       fetchCustomFoods();
       fetchWaterLogs();
       fetchWorkoutPlans();
+      fetchStreakData();
     }
   }, [token]); // eslint-disable-line
 
@@ -910,6 +914,14 @@ function App() {
   };
 
 
+  const fetchStreakData = async () => {
+    try {
+      const res = await axios.get(`${API}/streaks`, { headers: { Authorization: `Bearer ${token}` } });
+      setStreakData(res.data);
+    } catch (err) { console.log(err); }
+  };
+
+
   if (!token) {
     return (
       <div className="auth-page">
@@ -997,6 +1009,7 @@ function App() {
     { id: 'water', icon: 'ti-droplet', label: 'Water' },
     { id: 'plans', icon: 'ti-clipboard-list', label: 'Plans' },
     { id: 'caloriedash', icon: 'ti-chart-bar', label: 'Cal Dash' },
+    { id: 'streaks', icon: 'ti-flame', label: 'Streaks' },
         ].map(item => (
           <div key={item.id} className={`nav-item ${activeTab === item.id ? 'active' : ''}`}
             onClick={() => setActiveTab(item.id)}>
@@ -2204,6 +2217,141 @@ function App() {
         </div>
       )}
 
+
+      {/* ═══════════════════════════════ STREAKS & CONSISTENCY ══════════════════════════════ */}
+      {activeTab === 'streaks' && (
+        <div className="tab-content">
+          <h2 className="section-title">🔥 Streaks & Consistency</h2>
+
+          {/* ── Streak Cards Grid ── */}
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'12px',marginBottom:'16px'}}>
+            {[
+              { label:'Food Logging', key:'foodStreak', icon:'🍜', color:'#5B4FD4', bg:'#F0EFFD' },
+              { label:'Exercise',     key:'exerciseStreak', icon:'🏋️', color:'#1D9E75', bg:'#E6F8F3' },
+              { label:'Hydration',    key:'waterStreak', icon:'💧', color:'#3B82F6', bg:'#EEF2FF' },
+              { label:'Weigh-In',     key:'weightStreak', icon:'⚖️', color:'#E8820C', bg:'#FEF4E8' },
+            ].map(s => {
+              const val = streakData ? (streakData[s.key] || 0) : 0;
+              return (
+                <div key={s.key} className="card" style={{textAlign:'center',background:val > 0 ? s.bg : undefined}}>
+                  <div style={{fontSize:'24px',marginBottom:'4px'}}>{s.icon}</div>
+                  <div style={{fontSize:'28px',fontWeight:'900',color: val > 0 ? s.color : 'var(--text-secondary)'}}>{val}</div>
+                  <div style={{fontSize:'11px',color:'var(--text-secondary)',fontWeight:'600',textTransform:'uppercase',marginTop:'2px'}}>{s.label}</div>
+                  <div style={{fontSize:'11px',color:'var(--text-secondary)',marginTop:'2px'}}>{val === 1 ? 'day' : 'days'}</div>
+                  {val >= 7 && <div style={{fontSize:'10px',background:s.color,color:'#fff',borderRadius:'20px',padding:'2px 8px',marginTop:'6px',display:'inline-block'}}>
+                    {val >= 30 ? '💎 30+' : val >= 14 ? '⭐ 2 weeks' : '🔥 Week+'}
+                  </div>}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* ── Consistency Score ── */}
+          {streakData && (
+            <div className="card" style={{marginBottom:'16px',textAlign:'center'}}>
+              {(() => {
+                const totalDays = Math.max(streakData.totalFoodDays || 0, 1);
+                const exDays = streakData.totalExDays || 0;
+                const heatLen = (streakData.heatmap || []).length;
+                const score = Math.round(Math.min(
+                  ((streakData.foodStreak||0)*3 + (streakData.exerciseStreak||0)*3 +
+                   (streakData.waterStreak||0)*2 + (streakData.weightStreak||0)*2 +
+                   Math.min(heatLen, 30)) / 1.1, 100
+                ));
+                const label = score >= 80 ? '🏆 Elite' : score >= 60 ? '💪 Strong' : score >= 40 ? '👍 Good' : '🌱 Building';
+                const color = score >= 80 ? '#1D9E75' : score >= 60 ? '#5B4FD4' : score >= 40 ? '#E8820C' : '#888';
+                return (
+                  <>
+                    <div style={{fontSize:'11px',color:'var(--text-secondary)',fontWeight:'600',textTransform:'uppercase',marginBottom:'8px'}}>Consistency Score</div>
+                    <div style={{fontSize:'52px',fontWeight:'900',color,lineHeight:1}}>{score}</div>
+                    <div style={{fontSize:'16px',fontWeight:'700',color,marginTop:'4px'}}>{label}</div>
+                    <div style={{height:'8px',background:'var(--border)',borderRadius:'8px',margin:'12px 0 4px'}}>
+                      <div style={{height:'8px',borderRadius:'8px',background:color,width:`${score}%`,transition:'width .6s ease'}}/>
+                    </div>
+                    <div style={{fontSize:'12px',color:'var(--text-secondary)'}}>
+                      {totalDays} food days · {exDays} workout days · {heatLen} active days (90d)
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+          )}
+
+          {/* ── 90-Day Activity Heatmap ── */}
+          <div className="card">
+            <h3 style={{fontSize:'14px',fontWeight:'700',marginBottom:'12px'}}>90-Day Activity Heatmap</h3>
+            {(() => {
+              const heatmap = streakData ? (streakData.heatmap || []) : [];
+              const activeDates = new Set(heatmap);
+              const days = [];
+              for (let i = 89; i >= 0; i--) {
+                const d = new Date();
+                d.setDate(d.getDate() - i);
+                const str = d.toISOString().split('T')[0];
+                days.push({ str, active: activeDates.has(str), isToday: i === 0 });
+              }
+              const weeks = [];
+              for (let w = 0; w < 13; w++) weeks.push(days.slice(w*7, w*7+7));
+              const dayLabels = ['S','M','T','W','T','F','S'];
+              return (
+                <div style={{overflowX:'auto'}}>
+                  <div style={{display:'flex',gap:'2px',minWidth:'fit-content'}}>
+                    {weeks.map((week, wi) => (
+                      <div key={wi} style={{display:'flex',flexDirection:'column',gap:'2px'}}>
+                        {week.map((day, di) => (
+                          <div key={di} title={day.str}
+                            style={{
+                              width:'16px', height:'16px', borderRadius:'3px',
+                              background: day.active ? '#5B4FD4' : (darkMode ? 'rgba(255,255,255,.08)' : '#EEF2FF'),
+                              border: day.isToday ? '1px solid #5B4FD4' : '1px solid transparent',
+                              cursor:'default'
+                            }}/>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{display:'flex',gap:'8px',marginTop:'8px',alignItems:'center',justifyContent:'flex-end'}}>
+                    <div style={{width:'12px',height:'12px',borderRadius:'2px',background:darkMode?'rgba(255,255,255,.08)':'#EEF2FF'}}/>
+                    <span style={{fontSize:'11px',color:'var(--text-secondary)'}}>No activity</span>
+                    <div style={{width:'12px',height:'12px',borderRadius:'2px',background:'#5B4FD4'}}/>
+                    <span style={{fontSize:'11px',color:'var(--text-secondary)'}}>Active</span>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+
+          {/* ── Streak Milestones ── */}
+          <div className="card" style={{marginTop:'16px'}}>
+            <h3 style={{fontSize:'14px',fontWeight:'700',marginBottom:'12px'}}>Milestones</h3>
+            {[
+              { days:3,  icon:'🔥', label:'3-Day Streak',    desc:'Log food 3 days in a row', key:'foodStreak' },
+              { days:7,  icon:'⭐',     label:'Week Warrior',    desc:'7-day food streak',        key:'foodStreak' },
+              { days:14, icon:'🏅', label:'2-Week Strong',   desc:'14-day food streak',       key:'foodStreak' },
+              { days:30, icon:'💎', label:'Monthly Master',  desc:'30-day food streak',       key:'foodStreak' },
+              { days:7,  icon:'💪', label:'Workout Week',    desc:'7-day exercise streak',    key:'exerciseStreak' },
+              { days:7,  icon:'💧', label:'Hydration Hero',  desc:'7-day water streak',       key:'waterStreak' },
+            ].map((m, i) => {
+              const current = streakData ? (streakData[m.key] || 0) : 0;
+              const unlocked = current >= m.days;
+              return (
+                <div key={i} style={{display:'flex',alignItems:'center',gap:'12px',padding:'10px 0',borderBottom:'1px solid var(--border)',opacity: unlocked ? 1 : 0.45}}>
+                  <div style={{fontSize:'22px',width:'32px',textAlign:'center'}}>{m.icon}</div>
+                  <div style={{flex:1}}>
+                    <div style={{fontWeight:'700',fontSize:'14px'}}>{m.label}</div>
+                    <div style={{fontSize:'12px',color:'var(--text-secondary)'}}>{m.desc}</div>
+                  </div>
+                  {unlocked
+                    ? <div style={{background:'#1D9E75',color:'#fff',borderRadius:'20px',padding:'3px 10px',fontSize:'11px',fontWeight:'700'}}>Unlocked</div>
+                    : <div style={{background:'var(--surface)',color:'var(--text-secondary)',borderRadius:'20px',padding:'3px 10px',fontSize:'11px'}}>{current}/{m.days}d</div>
+                  }
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       </main>
 
       <div className="bottomnav">
@@ -2220,6 +2368,7 @@ function App() {
           {id:'supplements',icon:'💊',label:'Supplements'},
       {id:'water',icon:'💧',label:'Water'},
       {id:'plans',icon:'📋',label:'Plans'},
+      {id:'streaks',icon:'🔥',label:'Streaks'},
         ].map(item=>(
           <button key={item.id} className={`bottomnav-btn ${activeTab===item.id?'bottomnav-active':''}`}
             onClick={()=>setActiveTab(item.id)}>
