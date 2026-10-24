@@ -1,6 +1,6 @@
 package lifeos_backend.service;
 
-import lifeos_backend.model.WeightEntity;
+import lifeos_backend.model.WeightLog;
 import lifeos_backend.repository.WeightRepository;
 import org.springframework.stereotype.Service;
 import java.util.List;
@@ -14,11 +14,11 @@ public class WeightService {
         this.weightRepository = weightRepository;
     }
 
-    public WeightEntity logWeight(WeightEntity entity) {
+    public WeightLog logWeight(WeightLog entity) {
         return weightRepository.save(entity);
     }
 
-    public List<WeightEntity> getWeightsByUser(Long userId) {
+    public List<WeightLog> getWeightsByUser(Long userId) {
         return weightRepository.findByUserIdOrderByDateDesc(userId);
     }
 
