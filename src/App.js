@@ -3,8 +3,8 @@ import axios from 'axios';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import './App.css';
 
-const API = 'http://localhost:8080/api';
-const USDA_KEY = 'zFZ3LLHNi6jM9uLKavvLVtqFEQvledgKCy0t3xwy';
+const API = process.env.REACT_APP_API_URL || 'http://localhost:8080/api';
+const USDA_KEY = process.env.REACT_APP_USDA_KEY || '';
 
 function App() {
   const [token, setToken] = useState(localStorage.getItem('token'));
@@ -20,7 +20,13 @@ function App() {
   const [searching, setSearching] = useState(false);
   const [message, setMessage] = useState('');
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [water, setWater] = useState(0);
+  const [water, setWater] = useState(() => {
+    const today = new Date().toISOString().split('T')[0];
+    try {
+      const saved = JSON.parse(localStorage.getItem('waterLog') || '{}');
+      return saved.date === today ? (saved.count || 0) : 0;
+    } catch { return 0; }
+  });
   const [mealType, setMealType] = useState('breakfast');
   const [resetToken, setResetToken] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -132,6 +138,15 @@ function App() {
     }
     localStorage.setItem('darkMode', darkMode);
   }, [darkMode]);
+
+  // Persist water intake daily — resets automatically at midnight via date key
+  useEffect(() => {
+    const today = new Date().toISOString().split('T')[0];
+    try {
+      localStorage.setItem('waterLog', JSON.stringify({ date: today, count: water }));
+    } catch { /* storage full or blocked */ }
+  }, [water]);
+
   // Helper: extract user ID from the JWT token payload
   const getUserIdFromToken = (jwt) => {
     try {
@@ -165,7 +180,7 @@ function App() {
         const subscription = existing || await registration.pushManager.subscribe({
           userVisibleOnly: true,
           applicationServerKey: urlBase64ToUint8Array(
-            'BO7mkNN_C_6Ex34wPYEFZL9xMaCnuGb3UuJt49qUwyhS726jv9_NwbUGn5X0Io_enG61kcFOxWr9xadUFVqLQVg'
+            process.env.REACT_APP_VAPID_KEY || ''
           ),
         });
 
@@ -620,6 +635,7 @@ function App() {
     const hasBreakfast = foodLogs.some(f => f.mealType === 'breakfast');
     const hasLunch = foodLogs.some(f => f.mealType === 'lunch');
     const hasDinner = foodLogs.some(f => f.mealType === 'dinner');
+    const hasSnack = foodLogs.some(f => f.mealType === 'snack');
     const todayExercise = exerciseLogs.length > 0;
     const calorieRemaining = dailyGoal - totalCalories + totalBurned;
     const proteinRemaining = proteinGoal - totalProtein;
@@ -993,7 +1009,7 @@ function App() {
               </div>
               <div className="streak-dots">
                 {[...Array(7)].map((_, i) => (
-                  <div key={i} className={`streak-dot ${i % 3 === 0 && i > 0 ? 'off' : ''}`}/>
+                  <div key={i} className={`streak-dot ${i >= Math.min(streak, 7) ? 'off' : ''}`} title={i < streak ? `Day ${i + 1} ✓` : `Day ${i + 1}`}/>
                 ))}
               </div>
             </div>
@@ -1140,9 +1156,9 @@ function App() {
                 <div className="cal-sep"/>
                 <div className="cal-stat-row">
                   <div className="cal-stat-dot" style={{background:'#A0A0B0'}}/>
-                  <span className="cal-stat-label">Net Left</span>
-                  <span className="cal-stat-val" style={{color:'#5B4FD4'}}>{remaining}</span>
-                  <span className="cal-stat-badge badge-purple">kcal</span>
+                  <span className="cal-stat-label">Net Eaten</span>
+                  <span className="cal-stat-val" style={{color: (totalCalories - totalBurned) > dailyGoal ? '#D85A30' : '#5B4FD4'}}>{Math.max(totalCalories - totalBurned, 0)}</span>
+                  <span className="cal-stat-badge badge-purple">net kcal</span>
                 </div>
               </div>
               {bmi && (

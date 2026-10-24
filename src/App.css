@@ -1,5 +1,140 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
+/* ════════════════════════════════════════════════════════
+   LIFEOS DESIGN SYSTEM — CSS Custom Properties
+   Single source of truth for all colors, spacing, type,
+   shadows, and animation. Edit here, propagates everywhere.
+   ════════════════════════════════════════════════════════ */
+
+:root {
+  /* ── Brand Colors ─────────────────────────────────── */
+  --color-primary:       #5B4FD4;   /* Deep violet — primary actions */
+  --color-primary-light: #F0EFFD;   /* Tint — active states, badges */
+  --color-primary-dark:  #4A3FC0;   /* Hover/pressed */
+  --color-primary-muted: #9F8FFF;   /* Disabled / subtle */
+
+  --color-nutrition:     #1D9E75;   /* Emerald — nutrition, success */
+  --color-nutrition-bg:  #EDFAF5;
+  --color-nutrition-border: #BAF0D8;
+
+  --color-activity:      #E8820C;   /* Amber — exercise, warnings */
+  --color-activity-bg:   #FEF4E8;
+  --color-activity-border: #F5D4A8;
+
+  --color-danger:        #D85A30;   /* Coral red — errors, over-limit */
+  --color-danger-bg:     #FEF4EE;
+  --color-danger-border: #F5C4A8;
+
+  --color-accent-blue:   #3B82F6;   /* Water / hydration */
+  --color-accent-purple: #7C5CFC;   /* Misc accent */
+
+  /* ── Neutrals ─────────────────────────────────────── */
+  --color-ink:           #0A0A14;   /* Near-black body text */
+  --color-ink-secondary: #9898AA;   /* Subtext, placeholders */
+  --color-ink-tertiary:  #C4C4D0;   /* Disabled text */
+
+  --color-surface:       #FFFFFF;   /* Card backgrounds */
+  --color-surface-raised:#F7F7FA;   /* Inputs, tags, subtle fills */
+  --color-surface-sunken:#F0F0F5;   /* Page background */
+
+  --color-border:        #EBEBF0;   /* Standard border */
+  --color-border-light:  #F5F5F8;   /* Hairline separator */
+
+  /* ── Spacing Scale (4pt grid) ─────────────────────── */
+  --space-1:  4px;
+  --space-2:  8px;
+  --space-3:  12px;
+  --space-4:  16px;
+  --space-5:  20px;
+  --space-6:  24px;
+  --space-7:  28px;
+  --space-8:  32px;
+  --space-9:  36px;
+  --space-10: 40px;
+
+  /* ── Typography Scale ─────────────────────────────── */
+  --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+
+  --text-xs:   11px;   /* Badges, labels, caps */
+  --text-sm:   12px;   /* Secondary body, timestamps */
+  --text-base: 13px;   /* Primary body text */
+  --text-md:   14px;   /* Inputs, buttons */
+  --text-lg:   15px;   /* Card headings */
+  --text-xl:   18px;   /* Section titles */
+  --text-2xl:  22px;   /* Auth headings */
+  --text-3xl:  26px;   /* Macro values */
+  --text-4xl:  36px;   /* Health score */
+
+  --fw-regular: 400;
+  --fw-medium:  500;
+  --fw-semibold: 600;
+  --fw-bold:    700;
+
+  --leading-tight: 1;
+  --leading-snug:  1.3;
+  --leading-normal: 1.5;
+
+  /* ── Border Radius ────────────────────────────────── */
+  --radius-sm:  8px;
+  --radius-md:  10px;
+  --radius-lg:  12px;
+  --radius-xl:  14px;
+  --radius-2xl: 16px;
+  --radius-3xl: 20px;
+  --radius-4xl: 24px;
+  --radius-full: 9999px;
+
+  /* ── Shadow System ────────────────────────────────── */
+  --shadow-xs:  0 1px 3px rgba(0,0,0,.04);
+  --shadow-sm:  0 4px 16px rgba(0,0,0,.04), 0 1px 4px rgba(0,0,0,.03);
+  --shadow-md:  0 8px 24px rgba(0,0,0,.07);
+  --shadow-lg:  0 20px 60px rgba(0,0,0,.06), 0 4px 16px rgba(0,0,0,.04);
+  --shadow-primary: 0 8px 24px rgba(91,79,212,.25);
+  --shadow-focus: 0 0 0 3px rgba(91,79,212,.15);
+
+  /* ── Transitions ──────────────────────────────────── */
+  --transition-fast: all 0.15s ease;
+  --transition-base: all 0.2s ease;
+  --transition-slow: all 0.3s ease;
+
+  /* ── Z-Index Scale ────────────────────────────────── */
+  --z-base:    1;
+  --z-sticky:  99;
+  --z-sidebar: 100;
+  --z-overlay: 150;
+  --z-modal:   200;
+}
+
+/* ── Dark Mode Token Overrides ────────────────────────── */
+body.dark {
+  --color-ink:           #F0F0FF;
+  --color-ink-secondary: rgba(255,255,255,.4);
+  --color-ink-tertiary:  rgba(255,255,255,.2);
+
+  --color-surface:       rgba(255,255,255,.04);
+  --color-surface-raised: rgba(255,255,255,.06);
+  --color-surface-sunken: #0A0A14;
+
+  --color-border:        rgba(255,255,255,.07);
+  --color-border-light:  rgba(255,255,255,.05);
+
+  --color-primary-light: rgba(91,79,212,.2);
+  --color-primary-muted: #A89EFF;
+
+  --color-nutrition-bg:  rgba(29,158,117,.1);
+  --color-nutrition-border: rgba(29,158,117,.2);
+
+  --color-activity-bg:   rgba(232,130,12,.1);
+  --color-activity-border: rgba(232,130,12,.2);
+
+  --color-danger-bg:     rgba(216,90,48,.1);
+  --color-danger-border: rgba(216,90,48,.2);
+
+  --shadow-sm:  0 4px 24px rgba(0,0,0,.3);
+  --shadow-md:  0 8px 32px rgba(0,0,0,.4);
+  --shadow-lg:  0 20px 60px rgba(0,0,0,.5);
+}
+
 @keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
 @keyframes slideIn{from{opacity:0;transform:translateX(-10px)}to{opacity:1;transform:translateX(0)}}
 @keyframes shimmer{0%{left:-100%}100%{left:200%}}
