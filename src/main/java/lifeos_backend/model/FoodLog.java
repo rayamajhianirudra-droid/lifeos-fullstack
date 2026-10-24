@@ -1,4 +1,4 @@
-package com.lifeos.lifeos_backend.model;
+package lifeos_backend.model;
 
 import jakarta.persistence.*;
 import java.time.LocalDate;

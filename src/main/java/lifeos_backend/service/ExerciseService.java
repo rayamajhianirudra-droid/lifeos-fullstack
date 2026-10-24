@@ -1,7 +1,7 @@
-package com.lifeos.lifeos_backend.service;
+package lifeos_backend.service;
 
-import com.lifeos.lifeos_backend.model.ExerciseLog;
-import com.lifeos.lifeos_backend.repository.ExerciseRepository;
+import lifeos_backend.model.ExerciseLog;
+import lifeos_backend.repository.ExerciseRepository;
 import org.springframework.stereotype.Service;
 import java.time.LocalDate;
 import java.util.List;

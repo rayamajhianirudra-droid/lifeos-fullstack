@@ -1,4 +1,4 @@
-package com.lifeos.lifeos_backend.service;
+package lifeos_backend.service;
 
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;

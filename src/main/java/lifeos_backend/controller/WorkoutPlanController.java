@@ -4,7 +4,7 @@ import lifeos_backend.model.PlanExercise;
 import lifeos_backend.model.WorkoutPlan;
 import lifeos_backend.repository.PlanExerciseRepository;
 import lifeos_backend.repository.WorkoutPlanRepository;
-import com.lifeos.lifeos_backend.service.JwtService;
+import lifeos_backend.service.JwtService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;

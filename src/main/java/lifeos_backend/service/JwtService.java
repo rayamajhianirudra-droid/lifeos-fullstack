@@ -1,4 +1,4 @@
-package com.lifeos.lifeos_backend.service;
+package lifeos_backend.service;
 
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;

@@ -1,6 +1,6 @@
-package com.lifeos.lifeos_backend.repository;
+package lifeos_backend.repository;
 
-import com.lifeos.lifeos_backend.model.User;
+import lifeos_backend.model.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 import java.util.Optional;

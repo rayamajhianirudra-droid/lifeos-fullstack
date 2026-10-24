@@ -1,6 +1,6 @@
-package com.lifeos.lifeos_backend;
+package lifeos_backend;
 
-import com.lifeos.lifeos_backend.service.JwtService;
+import lifeos_backend.service.JwtService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;

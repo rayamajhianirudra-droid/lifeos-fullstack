@@ -1,7 +1,7 @@
-package com.lifeos.lifeos_backend.controller;
+package lifeos_backend.controller;
 
-import com.lifeos.lifeos_backend.model.User;
-import com.lifeos.lifeos_backend.service.UserService;
+import lifeos_backend.model.User;
+import lifeos_backend.service.UserService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;

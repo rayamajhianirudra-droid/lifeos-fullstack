@@ -1,7 +1,7 @@
-package com.lifeos.lifeos_backend.service;
+package lifeos_backend.service;
 
-import com.lifeos.lifeos_backend.model.FoodLog;
-import com.lifeos.lifeos_backend.repository.FoodLogRepository;
+import lifeos_backend.model.FoodLog;
+import lifeos_backend.repository.FoodLogRepository;
 import org.springframework.stereotype.Service;
 import java.time.LocalDate;
 import java.util.List;

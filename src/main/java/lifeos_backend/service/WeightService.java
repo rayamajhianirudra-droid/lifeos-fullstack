@@ -1,7 +1,7 @@
-package com.lifeos.lifeos_backend.service;
+package lifeos_backend.service;
 
-import com.lifeos.lifeos_backend.model.WeightEntity;
-import com.lifeos.lifeos_backend.repository.WeightRepository;
+import lifeos_backend.model.WeightEntity;
+import lifeos_backend.repository.WeightRepository;
 import org.springframework.stereotype.Service;
 import java.util.List;
 
