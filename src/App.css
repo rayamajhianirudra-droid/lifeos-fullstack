@@ -1065,6 +1065,13 @@ body{
   .date-nav-label{font-size:14px}
   .streak-banner{padding:10px 14px}
   .streak-num{font-size:22px}
+  /* Stage 4-6 new components — 768px */
+  .analytics-summary-row{grid-template-columns:1fr 1fr}
+  .analytics-header{flex-wrap:wrap;gap:var(--space-2)}
+  .range-tabs{flex-wrap:wrap}
+  .coach-context{grid-template-columns:1fr 1fr}
+  .coach-hero{padding:var(--space-4)}
+  .macro-donut-layout{flex-direction:column}
 }
 
 /* MOBILE SMALL 320px - 480px */
@@ -1097,6 +1104,19 @@ body{
   .streak-banner{padding:10px 12px}
   .streak-num{font-size:20px}
   .streak-text{font-size:10px}
+  /* Stage 4-6 new components — 480px */
+  .analytics-summary-row{grid-template-columns:1fr 1fr}
+  .analytics-card{padding:var(--space-3)}
+  .stat-tile-row{grid-template-columns:repeat(3,1fr);gap:var(--space-1)}
+  .stat-tile{padding:var(--space-2) var(--space-1)}
+  .stat-tile-val{font-size:var(--text-lg)}
+  .coach-hero{flex-direction:column;text-align:center;gap:var(--space-2)}
+  .coach-hero-score{align-self:center}
+  .coach-context{grid-template-columns:1fr 1fr}
+  .coach-score-num{font-size:32px}
+  .range-tab{padding:4px 10px;font-size:var(--text-xs)}
+  .chat-input-row{gap:var(--space-2)}
+  .quick-prompt-btn{font-size:var(--text-xs);padding:7px 10px}
 }
 
 /* IPAD PRO 1024px specific */
@@ -1124,6 +1144,11 @@ body{
   .log-btn{padding:10px 20px}
   .nav-item{padding:10px 10px}
   .date-nav-btn{width:40px;height:40px}
+  .range-tab{padding:8px 14px}
+  .quick-prompt-btn{padding:10px 14px}
+  .suggestion-chip{padding:8px 14px}
+  .chat-send-btn{width:46px;height:46px}
+  .delete-btn{padding:8px;font-size:16px}
 }
 /* ACHIEVEMENTS */
 .achievements-progress-bar{height:6px;background:#F0F0F4;border-radius:4px;overflow:hidden;margin-top:8px}
