@@ -91,6 +91,28 @@ function App() {
   const [customFoodMsg, setCustomFoodMsg] = useState('');
   const [showCustomForm, setShowCustomForm] = useState(false);
 
+  // --- Water Tracker (backend-synced) ---
+  const [waterLogs, setWaterLogs] = useState([]);
+  const [waterMsg, setWaterMsg] = useState('');
+  const [waterGoalOz, setWaterGoalOz] = useState(64); // 64 oz = 8 cups
+
+  // --- Weight Tracker (enhanced) ---
+  const [weightNotes, setWeightNotes] = useState('');
+  const [goalWeightLbs, setGoalWeightLbs] = useState(() => {
+    return parseFloat(localStorage.getItem('goalWeightLbs') || '0');
+  });
+
+  // --- Workout Plan Builder ---
+  const [workoutPlans, setWorkoutPlans] = useState([]);
+  const [planName, setPlanName] = useState('');
+  const [planDesc, setPlanDesc] = useState('');
+  const [planExercises, setPlanExercises] = useState([{ exerciseName: '', sets: 3, reps: 10, notes: '' }]);
+  const [planMsg, setPlanMsg] = useState('');
+  const [activePlanId, setActivePlanId] = useState(null);
+
+  // --- Calorie Dashboard ---
+  const [showCalorieDash, setShowCalorieDash] = useState(false);
+
   const calculateDailyGoal = (p) => {
     const weightKg = p.weightLbs * 0.453592;
     const heightCm = (p.heightFeet * 30.48) + (p.heightInches * 2.54);
@@ -118,6 +140,12 @@ function App() {
       fetchExerciseLogs(selectedDate);
       fetchWeeklyData();
       fetchDailyHistory();
+      fetchSupplements();
+      fetchSleep();
+      fetchMood();
+      fetchCustomFoods();
+      fetchWaterLogs();
+      fetchWorkoutPlans();
     }
   }, [token]); // eslint-disable-line
 
@@ -817,6 +845,71 @@ function App() {
   // eslint-disable-next-line
   }, [token]);
 
+  // ── WATER ──────────────────────────────────────────────────────────────────
+  const fetchWaterLogs = async () => {
+    try {
+      const res = await axios.get(`${API}/water/today`, { headers: { Authorization: `Bearer ${token}` } });
+      setWaterLogs(res.data);
+    } catch (err) { console.log(err); }
+  };
+  const logWater = async (oz) => {
+    try {
+      await axios.post(`${API}/water`, { amountOz: oz }, { headers: { Authorization: `Bearer ${token}` } });
+      setWaterMsg(`✅ +${oz}oz logged!`);
+      fetchWaterLogs();
+      setTimeout(() => setWaterMsg(''), 2000);
+    } catch (err) { setWaterMsg('❌ Error'); }
+  };
+  const deleteWaterLog = async (id) => {
+    try {
+      await axios.delete(`${API}/water/${id}`, { headers: { Authorization: `Bearer ${token}` } });
+      fetchWaterLogs();
+    } catch (err) { console.log(err); }
+  };
+  const totalWaterOz = waterLogs.reduce((sum, w) => sum + w.amountOz, 0);
+  const waterPct = Math.min((totalWaterOz / waterGoalOz) * 100, 100);
+
+  // ── WORKOUT PLANS ──────────────────────────────────────────────────────────
+  const fetchWorkoutPlans = async () => {
+    try {
+      const res = await axios.get(`${API}/workout-plans`, { headers: { Authorization: `Bearer ${token}` } });
+      setWorkoutPlans(res.data);
+    } catch (err) { console.log(err); }
+  };
+  const savePlan = async () => {
+    if (!planName.trim()) { setPlanMsg('❌ Enter a plan name'); return; }
+    const validExercises = planExercises.filter(e => e.exerciseName.trim());
+    if (validExercises.length === 0) { setPlanMsg('❌ Add at least one exercise'); return; }
+    try {
+      await axios.post(`${API}/workout-plans`, {
+        planName, description: planDesc, exercises: validExercises
+      }, { headers: { Authorization: `Bearer ${token}` } });
+      setPlanMsg('✅ Plan saved!');
+      setPlanName(''); setPlanDesc('');
+      setPlanExercises([{ exerciseName: '', sets: 3, reps: 10, notes: '' }]);
+      fetchWorkoutPlans();
+      setTimeout(() => setPlanMsg(''), 2500);
+    } catch (err) { setPlanMsg('❌ Error saving plan'); }
+  };
+  const deletePlan = async (id) => {
+    try {
+      await axios.delete(`${API}/workout-plans/${id}`, { headers: { Authorization: `Bearer ${token}` } });
+      fetchWorkoutPlans();
+    } catch (err) { console.log(err); }
+  };
+  const addPlanExercise = () => {
+    setPlanExercises([...planExercises, { exerciseName: '', sets: 3, reps: 10, notes: '' }]);
+  };
+  const updatePlanExercise = (idx, field, val) => {
+    const updated = [...planExercises];
+    updated[idx][field] = val;
+    setPlanExercises(updated);
+  };
+  const removePlanExercise = (idx) => {
+    setPlanExercises(planExercises.filter((_, i) => i !== idx));
+  };
+
+
   if (!token) {
     return (
       <div className="auth-page">
@@ -901,6 +994,9 @@ function App() {
           { id: 'sleep', icon: 'ti-moon', label: 'Sleep' },
           { id: 'mood', icon: 'ti-mood-happy', label: 'Mood' },
           { id: 'supplements', icon: 'ti-pill', label: 'Supplements' },
+    { id: 'water', icon: 'ti-droplet', label: 'Water' },
+    { id: 'plans', icon: 'ti-clipboard-list', label: 'Plans' },
+    { id: 'caloriedash', icon: 'ti-chart-bar', label: 'Cal Dash' },
         ].map(item => (
           <div key={item.id} className={`nav-item ${activeTab === item.id ? 'active' : ''}`}
             onClick={() => setActiveTab(item.id)}>
@@ -1903,6 +1999,211 @@ function App() {
           </div>
         )}
 
+
+      {/* ═══════════════════════════════ WATER TRACKER ══════════════════════════════ */}
+      {activeTab === 'water' && (
+        <div className="tab-content">
+          <h2 className="section-title">💧 Water Tracker</h2>
+          <div className="card" style={{textAlign:'center',marginBottom:'16px'}}>
+            <div style={{position:'relative',width:'140px',height:'140px',margin:'0 auto 12px'}}>
+              <svg width="140" height="140" style={{transform:'rotate(-90deg)'}}>
+                <circle cx="70" cy="70" r="58" fill="none" stroke={darkMode?'rgba(255,255,255,.08)':'#EEF2FF'} strokeWidth="12"/>
+                <circle cx="70" cy="70" r="58" fill="none" stroke="#3B82F6" strokeWidth="12"
+                  strokeDasharray={`${2*Math.PI*58}`}
+                  strokeDashoffset={`${2*Math.PI*58 - (waterPct/100)*2*Math.PI*58}`}
+                  strokeLinecap="round" style={{transition:'stroke-dashoffset .5s ease'}}/>
+              </svg>
+              <div style={{position:'absolute',top:'50%',left:'50%',transform:'translate(-50%,-50%)',textAlign:'center'}}>
+                <div style={{fontSize:'22px',fontWeight:'800',color:'#3B82F6'}}>{totalWaterOz}<span style={{fontSize:'12px',fontWeight:'500',color:'var(--text-secondary)'}}> oz</span></div>
+                <div style={{fontSize:'11px',color:'var(--text-secondary)'}}>of {waterGoalOz}oz</div>
+              </div>
+            </div>
+            <div style={{color:'var(--text-secondary)',fontSize:'13px',marginBottom:'8px'}}>
+              {waterPct >= 100 ? '🎉 Daily goal reached!' : `${Math.round(waterGoalOz - totalWaterOz)}oz remaining`}
+            </div>
+            <div style={{display:'flex',gap:'8px',justifyContent:'center',flexWrap:'wrap',marginBottom:'12px'}}>
+              {[8,16,24,32].map(oz => (
+                <button key={oz} className="btn-secondary" style={{fontSize:'13px',padding:'8px 14px'}} onClick={() => logWater(oz)}>+{oz}oz</button>
+              ))}
+            </div>
+            <div style={{display:'flex',gap:'8px',justifyContent:'center'}}>
+              <input type="number" className="input" placeholder="Custom oz" style={{width:'100px',textAlign:'center'}} id="customWaterOz"/>
+              <button className="btn-primary" onClick={() => {
+                const val = parseFloat(document.getElementById('customWaterOz').value);
+                if(val>0) { logWater(val); document.getElementById('customWaterOz').value=''; }
+              }}>Log</button>
+            </div>
+            {waterMsg && <p style={{marginTop:'8px',color:waterMsg.includes('✅')?'#1D9E75':'#E53935',fontSize:'13px'}}>{waterMsg}</p>}
+          </div>
+          <div style={{display:'flex',alignItems:'center',gap:'8px',marginBottom:'12px'}}>
+            <span style={{fontSize:'13px',color:'var(--text-secondary)'}}>Daily goal:</span>
+            <input type="number" className="input" value={waterGoalOz} onChange={e=>setWaterGoalOz(Number(e.target.value))}
+              style={{width:'80px',textAlign:'center'}}/>
+            <span style={{fontSize:'13px',color:'var(--text-secondary)'}}>oz</span>
+          </div>
+          {waterLogs.length > 0 && (
+            <div className="card">
+              <h3 style={{fontSize:'14px',fontWeight:'700',marginBottom:'12px'}}>Today's Logs</h3>
+              {waterLogs.map(w => (
+                <div key={w.id} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'8px 0',borderBottom:'1px solid var(--border)'}}>
+                  <span style={{fontSize:'14px'}}>💧 {w.amountOz}oz</span>
+                  <button onClick={()=>deleteWaterLog(w.id)} style={{background:'none',border:'none',cursor:'pointer',color:'var(--text-secondary)',fontSize:'16px'}}>×</button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ═══════════════════════════════ WORKOUT PLANS ═══════════════════════════════ */}
+      {activeTab === 'plans' && (
+        <div className="tab-content">
+          <h2 className="section-title">📋 Workout Plans</h2>
+          <div className="card" style={{marginBottom:'16px'}}>
+            <h3 style={{fontSize:'14px',fontWeight:'700',marginBottom:'12px'}}>Create New Plan</h3>
+            <input className="input" placeholder="Plan name (e.g. Push Day, Full Body)" value={planName} onChange={e=>setPlanName(e.target.value)} style={{marginBottom:'8px'}}/>
+            <input className="input" placeholder="Description (optional)" value={planDesc} onChange={e=>setPlanDesc(e.target.value)} style={{marginBottom:'12px'}}/>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'8px'}}>
+              <span style={{fontSize:'13px',fontWeight:'600'}}>Exercises</span>
+              <button className="btn-secondary" style={{fontSize:'12px',padding:'6px 12px'}} onClick={addPlanExercise}>+ Add Exercise</button>
+            </div>
+            {planExercises.map((ex, idx) => (
+              <div key={idx} style={{background:'var(--surface)',borderRadius:'10px',padding:'10px',marginBottom:'8px',border:'1px solid var(--border)'}}>
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'6px'}}>
+                  <span style={{fontSize:'12px',color:'var(--text-secondary)',fontWeight:'600'}}>Exercise {idx+1}</span>
+                  {planExercises.length > 1 && <button onClick={()=>removePlanExercise(idx)} style={{background:'none',border:'none',cursor:'pointer',color:'#E53935',fontSize:'14px'}}>✕</button>}
+                </div>
+                <input className="input" placeholder="Exercise name" value={ex.exerciseName} onChange={e=>updatePlanExercise(idx,'exerciseName',e.target.value)} style={{marginBottom:'6px'}}/>
+                <div style={{display:'flex',gap:'8px'}}>
+                  <div style={{flex:1}}>
+                    <label style={{fontSize:'11px',color:'var(--text-secondary)'}}>Sets</label>
+                    <input type="number" className="input" value={ex.sets} onChange={e=>updatePlanExercise(idx,'sets',parseInt(e.target.value)||1)} style={{textAlign:'center'}}/>
+                  </div>
+                  <div style={{flex:1}}>
+                    <label style={{fontSize:'11px',color:'var(--text-secondary)'}}>Reps</label>
+                    <input type="number" className="input" value={ex.reps} onChange={e=>updatePlanExercise(idx,'reps',parseInt(e.target.value)||1)} style={{textAlign:'center'}}/>
+                  </div>
+                  <div style={{flex:2}}>
+                    <label style={{fontSize:'11px',color:'var(--text-secondary)'}}>Notes</label>
+                    <input className="input" placeholder="e.g. 3 min rest" value={ex.notes} onChange={e=>updatePlanExercise(idx,'notes',e.target.value)}/>
+                  </div>
+                </div>
+              </div>
+            ))}
+            <button className="btn-primary" onClick={savePlan} style={{width:'100%',marginTop:'8px'}}>💾 Save Plan</button>
+            {planMsg && <p style={{marginTop:'8px',textAlign:'center',color:planMsg.includes('✅')?'#1D9E75':'#E53935',fontSize:'13px'}}>{planMsg}</p>}
+          </div>
+
+          {workoutPlans.length > 0 && (
+            <div>
+              <h3 style={{fontSize:'14px',fontWeight:'700',marginBottom:'12px',color:'var(--text-secondary)'}}>YOUR PLANS ({workoutPlans.length})</h3>
+              {workoutPlans.map(plan => (
+                <div key={plan.id} className="card" style={{marginBottom:'12px'}}>
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:'8px'}}>
+                    <div>
+                      <div style={{fontWeight:'700',fontSize:'15px'}}>{plan.planName}</div>
+                      {plan.description && <div style={{fontSize:'12px',color:'var(--text-secondary)',marginTop:'2px'}}>{plan.description}</div>}
+                    </div>
+                    <div style={{display:'flex',gap:'6px'}}>
+                      <button onClick={()=>setActivePlanId(activePlanId===plan.id?null:plan.id)}
+                        className="btn-secondary" style={{fontSize:'12px',padding:'5px 10px'}}>
+                        {activePlanId===plan.id?'▲ Hide':'▼ View'}
+                      </button>
+                      <button onClick={()=>deletePlan(plan.id)} style={{background:'#FEF0EC',border:'1px solid #F5C4A8',borderRadius:'8px',padding:'5px 10px',cursor:'pointer',color:'#D85A30',fontSize:'12px'}}>✕</button>
+                    </div>
+                  </div>
+                  <div style={{display:'flex',gap:'8px'}}>
+                    <span style={{background:'var(--surface)',borderRadius:'6px',padding:'3px 8px',fontSize:'11px',color:'var(--text-secondary)'}}>{(plan.exercises||[]).length} exercises</span>
+                  </div>
+                  {activePlanId===plan.id && (plan.exercises||[]).length > 0 && (
+                    <div style={{marginTop:'10px'}}>
+                      {plan.exercises.map((ex,i) => (
+                        <div key={ex.id} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'8px 0',borderBottom:'1px solid var(--border)'}}>
+                          <span style={{fontSize:'14px',fontWeight:'600'}}>{i+1}. {ex.exerciseName}</span>
+                          <div style={{display:'flex',gap:'8px',fontSize:'12px',color:'var(--text-secondary)'}}>
+                            <span>{ex.sets}×{ex.reps}</span>
+                            {ex.notes && <span style={{fontStyle:'italic'}}>{ex.notes}</span>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+          {workoutPlans.length === 0 && (
+            <div className="card" style={{textAlign:'center',padding:'32px',color:'var(--text-secondary)'}}>
+              <div style={{fontSize:'40px',marginBottom:'12px'}}>📋</div>
+              <div style={{fontWeight:'600',marginBottom:'4px'}}>No plans yet</div>
+              <div style={{fontSize:'13px'}}>Create your first workout plan above</div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ══════════════════════════ CALORIE DASHBOARD ════════════════════════════════ */}
+      {activeTab === 'caloriedash' && (
+        <div className="tab-content">
+          <h2 className="section-title">📊 Calorie Dashboard</h2>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'12px',marginBottom:'16px'}}>
+            <div className="card" style={{textAlign:'center'}}>
+              <div style={{fontSize:'11px',color:'var(--text-secondary)',fontWeight:'600',marginBottom:'4px',textTransform:'uppercase'}}>Calories In</div>
+              <div style={{fontSize:'28px',fontWeight:'800',color:'#5B4FD4'}}>{totalCalories}</div>
+              <div style={{fontSize:'11px',color:'var(--text-secondary)'}}>goal: {dailyGoal}</div>
+            </div>
+            <div className="card" style={{textAlign:'center'}}>
+              <div style={{fontSize:'11px',color:'var(--text-secondary)',fontWeight:'600',marginBottom:'4px',textTransform:'uppercase'}}>Calories Burned</div>
+              <div style={{fontSize:'28px',fontWeight:'800',color:'#E8820C'}}>{totalBurned}</div>
+              <div style={{fontSize:'11px',color:'var(--text-secondary)'}}>from exercise</div>
+            </div>
+            <div className="card" style={{textAlign:'center',gridColumn:'1/-1'}}>
+              <div style={{fontSize:'11px',color:'var(--text-secondary)',fontWeight:'600',marginBottom:'4px',textTransform:'uppercase'}}>
+                {dailyGoal - totalCalories + totalBurned >= 0 ? '🟢 Calorie Deficit' : '🔴 Calorie Surplus'}
+              </div>
+              <div style={{fontSize:'36px',fontWeight:'900',color: dailyGoal - totalCalories + totalBurned >= 0 ? '#1D9E75' : '#E53935'}}>
+                {Math.abs(dailyGoal - totalCalories + totalBurned)}
+                <span style={{fontSize:'14px',fontWeight:'500',color:'var(--text-secondary)'}}> kcal</span>
+              </div>
+              <div style={{fontSize:'12px',color:'var(--text-secondary)',marginTop:'4px'}}>
+                {dailyGoal - totalCalories + totalBurned >= 0
+                  ? 'You are under your goal — good for fat loss'
+                  : 'You are over your goal — adjust intake or add exercise'}
+              </div>
+            </div>
+          </div>
+          <div className="card" style={{marginBottom:'16px'}}>
+            <h3 style={{fontSize:'14px',fontWeight:'700',marginBottom:'12px'}}>Weekly Calorie Trend</h3>
+            {weeklyData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={180}>
+                <LineChart data={weeklyData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={darkMode?'rgba(255,255,255,.06)':'#F0F0F8'} />
+                  <XAxis dataKey="date" tick={{fontSize:10}} tickFormatter={v=>v.slice(5)} stroke="var(--text-secondary)"/>
+                  <YAxis tick={{fontSize:10}} stroke="var(--text-secondary)"/>
+                  <Tooltip {...tooltipStyle}/>
+                  <Line type="monotone" dataKey="calories" stroke="#5B4FD4" strokeWidth={2} dot={{r:3}} name="Calories"/>
+                </LineChart>
+              </ResponsiveContainer>
+            ) : <p style={{color:'var(--text-secondary)',fontSize:'13px',textAlign:'center'}}>Log food to see your trend</p>}
+          </div>
+          <div className="card">
+            <h3 style={{fontSize:'14px',fontWeight:'700',marginBottom:'12px'}}>Macro Breakdown</h3>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'10px',textAlign:'center'}}>
+              {[{label:'Protein',g:totalProtein,goal:proteinGoal,color:'#5B4FD4'},{label:'Carbs',g:totalCarbs,goal:carbsGoal,color:'#1D9E75'},{label:'Fat',g:totalFat,goal:fatGoal,color:'#E8820C'}].map(m=>(
+                <div key={m.label} style={{background:'var(--surface)',borderRadius:'10px',padding:'10px'}}>
+                  <div style={{fontSize:'11px',color:'var(--text-secondary)',marginBottom:'4px'}}>{m.label}</div>
+                  <div style={{fontSize:'18px',fontWeight:'800',color:m.color}}>{m.g}g</div>
+                  <div style={{fontSize:'11px',color:'var(--text-secondary)'}}>/ {m.goal}g</div>
+                  <div style={{height:'4px',background:'var(--border)',borderRadius:'4px',marginTop:'6px'}}>
+                    <div style={{height:'4px',borderRadius:'4px',background:m.color,width:`${Math.min((m.g/m.goal)*100,100)}%`}}/>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       </main>
 
       <div className="bottomnav">
@@ -1917,6 +2218,8 @@ function App() {
           {id:'sleep',icon:'😴',label:'Sleep'},
           {id:'mood',icon:'😊',label:'Mood'},
           {id:'supplements',icon:'💊',label:'Supplements'},
+      {id:'water',icon:'💧',label:'Water'},
+      {id:'plans',icon:'📋',label:'Plans'},
         ].map(item=>(
           <button key={item.id} className={`bottomnav-btn ${activeTab===item.id?'bottomnav-active':''}`}
             onClick={()=>setActiveTab(item.id)}>
