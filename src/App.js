@@ -91,6 +91,9 @@ function App() {
   const [customFoodMsg, setCustomFoodMsg] = useState('');
   const [showCustomForm, setShowCustomForm] = useState(false);
 
+  // --- Notifications ---
+  const [showNotifDropdown, setShowNotifDropdown] = useState(false);
+
   const calculateDailyGoal = (p) => {
     const weightKg = p.weightLbs * 0.453592;
     const heightCm = (p.heightFeet * 30.48) + (p.heightInches * 2.54);
@@ -608,6 +611,66 @@ function App() {
   const circumference = 2 * Math.PI * 54;
   const strokeDash = circumference - (caloriePercent / 100) * circumference;
 
+  // --- Smart Reminders ---
+  const getSmartReminders = () => {
+    const now = new Date();
+    const hour = now.getHours();
+    const reminders = [];
+
+    const hasBreakfast = foodLogs.some(f => f.mealType === 'breakfast');
+    const hasLunch = foodLogs.some(f => f.mealType === 'lunch');
+    const hasDinner = foodLogs.some(f => f.mealType === 'dinner');
+    const todayExercise = exerciseLogs.length > 0;
+    const calorieRemaining = dailyGoal - totalCalories + totalBurned;
+    const proteinRemaining = proteinGoal - totalProtein;
+
+    // Breakfast reminder (6am–10am)
+    if (hour >= 6 && hour < 10 && !hasBreakfast) {
+      reminders.push({ icon: '🌅', title: 'Log Breakfast', desc: "Start the day right — you haven't logged breakfast yet.", color: '#5B4FD4' });
+    }
+    // Lunch reminder (11am–2pm)
+    if (hour >= 11 && hour < 14 && !hasLunch) {
+      reminders.push({ icon: '☀️', title: 'Log Lunch', desc: "It's lunchtime — don't forget to log your meal.", color: '#1D9E75' });
+    }
+    // Dinner reminder (5pm–9pm)
+    if (hour >= 17 && hour < 21 && !hasDinner) {
+      reminders.push({ icon: '🌙', title: 'Log Dinner', desc: "Evening coming up — log dinner to keep your streak.", color: '#D85A30' });
+    }
+    // Water reminder
+    if (water < 4 && hour >= 12) {
+      reminders.push({ icon: '💧', title: 'Drink More Water', desc: `Only ${water}/8 glasses so far. Aim for at least 8 today.`, color: '#3B82F6' });
+    } else if (water < 8 && hour >= 18) {
+      reminders.push({ icon: '💧', title: 'Almost There — Water', desc: `${water}/8 glasses. ${8 - water} more to hit your goal.`, color: '#3B82F6' });
+    }
+    // Calorie warning — under 20% by 8pm
+    if (hour >= 20 && calorieRemaining > dailyGoal * 0.2) {
+      reminders.push({ icon: '🎯', title: 'Low Calorie Day', desc: `Only ${totalCalories} of ${dailyGoal} calories logged. Consider a snack.`, color: '#E8820C' });
+    }
+    // Over calorie goal
+    if (totalCalories > dailyGoal * 1.1) {
+      reminders.push({ icon: '⚠️', title: 'Over Calorie Goal', desc: `You're ${totalCalories - dailyGoal} cal over today's goal. Stay mindful.`, color: '#D85A30' });
+    }
+    // Protein reminder
+    if (proteinRemaining > 20 && hour >= 15) {
+      reminders.push({ icon: '💪', title: 'Protein Goal', desc: `${Math.round(proteinRemaining)}g of protein left to hit your goal. Add a high-protein snack.`, color: '#1D9E75' });
+    }
+    // Exercise reminder (afternoon with no exercise)
+    if (!todayExercise && hour >= 14 && hour < 20) {
+      reminders.push({ icon: '🏃', title: 'No Exercise Logged', desc: "You haven't logged any activity today. Even a walk counts!", color: '#7C5CFC' });
+    }
+    // Streak at risk (end of day, nothing logged)
+    if (streak > 0 && foodLogs.length === 0 && hour >= 20) {
+      reminders.push({ icon: '🔥', title: 'Streak at Risk!', desc: `Your ${streak}-day streak will reset if you don't log anything today.`, color: '#D85A30' });
+    }
+    // All good message when nothing to remind
+    if (reminders.length === 0) {
+      reminders.push({ icon: '✅', title: "You're on track!", desc: 'All goals looking good today. Keep it up!', color: '#1D9E75' });
+    }
+    return reminders;
+  };
+  const smartReminders = getSmartReminders();
+  const unreadCount = smartReminders.filter(r => r.icon !== '✅').length;
+
   const mealCategories = [
     { key: 'breakfast', label: '🌅 Breakfast', color: '#5B4FD4' },
     { key: 'lunch', label: '☀️ Lunch', color: '#1D9E75' },
@@ -944,12 +1007,63 @@ function App() {
           <p>"Every healthy choice compounds."</p>
         </div>
         <div className="topnav-right">
-          <button className="dark-mode-btn" onClick={() => setDarkMode(!darkMode)}>
-            {darkMode ? '☀️' : '🌙'}
+          <button className="dark-mode-btn" onClick={() => setDarkMode(!darkMode)} title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}>
+            <i className={darkMode ? 'ti ti-sun' : 'ti ti-moon'} style={{fontSize:'16px', color: darkMode ? '#F5C842' : '#5B4FD4'}} aria-hidden="true"/>
           </button>
-          <div className="topnav-notif">
-            <i className="ti ti-bell" style={{fontSize:'16px',color:'#8888A0'}} aria-hidden="true"/>
-            <div className="topnav-notif-dot"/>
+          <div className="topnav-notif" style={{position:'relative'}}>
+            <button
+              className="dark-mode-btn"
+              onClick={() => setShowNotifDropdown(p => !p)}
+              title="Smart reminders"
+              style={{position:'relative'}}
+            >
+              <i className="ti ti-bell" style={{fontSize:'16px', color: unreadCount > 0 ? '#5B4FD4' : '#8888A0'}} aria-hidden="true"/>
+              {unreadCount > 0 && (
+                <span style={{
+                  position:'absolute', top:'4px', right:'4px',
+                  width:'8px', height:'8px', borderRadius:'50%',
+                  background:'#D85A30', border:'1.5px solid var(--bg,#fff)'
+                }}/>
+              )}
+            </button>
+            {showNotifDropdown && (
+              <>
+                <div onClick={() => setShowNotifDropdown(false)} style={{position:'fixed',inset:0,zIndex:999}}/>
+                <div style={{
+                  position:'absolute', top:'calc(100% + 8px)', right:0,
+                  width:'280px', background: darkMode ? '#1a1a2e' : '#fff',
+                  border: darkMode ? '1px solid rgba(255,255,255,.1)' : '1px solid #E4E4EC',
+                  borderRadius:'14px', boxShadow:'0 8px 32px rgba(0,0,0,.15)',
+                  zIndex:1000, overflow:'hidden'
+                }}>
+                  <div style={{padding:'12px 16px 8px', borderBottom: darkMode ? '1px solid rgba(255,255,255,.07)' : '1px solid #F0F0F4'}}>
+                    <span style={{fontSize:'13px', fontWeight:'700', color: darkMode ? '#F0F0FF' : '#0A0A14'}}>Smart Reminders</span>
+                    <span style={{fontSize:'11px', color:'#8888A0', marginLeft:'6px'}}>{new Date().toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})}</span>
+                  </div>
+                  <div style={{maxHeight:'320px', overflowY:'auto'}}>
+                    {smartReminders.map((r, i) => (
+                      <div key={i} style={{
+                        display:'flex', gap:'10px', alignItems:'flex-start',
+                        padding:'10px 16px',
+                        borderBottom: i < smartReminders.length - 1
+                          ? (darkMode ? '1px solid rgba(255,255,255,.04)' : '1px solid #F7F7FA')
+                          : 'none'
+                      }}>
+                        <span style={{
+                          width:'32px', height:'32px', borderRadius:'10px', flexShrink:0,
+                          background: r.color + '18', display:'flex', alignItems:'center',
+                          justifyContent:'center', fontSize:'15px'
+                        }}>{r.icon}</span>
+                        <div>
+                          <div style={{fontSize:'12px', fontWeight:'700', color: darkMode ? '#F0F0FF' : '#0A0A14', marginBottom:'2px'}}>{r.title}</div>
+                          <div style={{fontSize:'11px', color:'#8888A0', lineHeight:'1.4'}}>{r.desc}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
           </div>
           <div className="topnav-date">{new Date().toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})}</div>
           <div className="topnav-user">
