@@ -1814,56 +1814,138 @@ function App() {
         {/* AI COACH */}
         {activeTab === 'coach' && (
           <div className="tab-content">
-            <div className="progress-card">
-              <h3>🤖 AI Health Coach</h3>
-              <p style={{fontSize:'12px',color:'#9898AA',marginBottom:'16px'}}>Powered by Gemini AI — ask anything about your health and nutrition</p>
-              <div className="coach-context">
-                <div className="coach-context-item"><span>🎯 Goal</span><strong>{profile.goal}</strong></div>
-                <div className="coach-context-item"><span>🔥 Calories</span><strong>{totalCalories}/{dailyGoal}</strong></div>
-                <div className="coach-context-item"><span>💪 Protein</span><strong>{totalProtein}g/{proteinGoal}g</strong></div>
-                <div className="coach-context-item"><span>🏃 Burned</span><strong>{totalBurned} cal</strong></div>
+
+            {/* ── COACH HERO ── */}
+            <div className="coach-hero">
+              <div className="coach-hero-left">
+                <div className="coach-avatar">🤖</div>
+                <div>
+                  <div className="coach-hero-title">AI Health Coach</div>
+                  <div className="coach-hero-sub">Powered by Gemini AI</div>
+                </div>
+              </div>
+              <div className="coach-hero-score">
+                <div className="coach-score-num">{healthScore}</div>
+                <div className="coach-score-label">Health Score</div>
               </div>
             </div>
-            <div className="progress-card">
-              <div className="chat-messages">
+
+            {/* ── INSIGHT CHIPS ── */}
+            <div className="coach-insights">
+              <div className={`coach-insight-chip ${caloriePercent >= 90 && caloriePercent <= 110 ? 'chip-green' : caloriePercent > 110 ? 'chip-orange' : 'chip-purple'}`}>
+                {caloriePercent >= 90 && caloriePercent <= 110 ? '✅' : caloriePercent > 110 ? '⚠️' : '📊'}
+                <span>{Math.round(caloriePercent)}% of calorie goal</span>
+              </div>
+              <div className={`coach-insight-chip ${totalProtein >= proteinGoal ? 'chip-green' : 'chip-purple'}`}>
+                {totalProtein >= proteinGoal ? '💪' : '🥩'}
+                <span>{totalProtein}g / {proteinGoal}g protein</span>
+              </div>
+              {streak > 0 && (
+                <div className="coach-insight-chip chip-orange">
+                  🔥<span>{streak} day streak</span>
+                </div>
+              )}
+            </div>
+
+            {/* ── CONTEXT GRID ── */}
+            <div className="coach-context">
+              <div className="coach-context-item">
+                <span className="coach-ctx-icon">🎯</span>
+                <div className="coach-ctx-body">
+                  <div className="coach-ctx-label">Goal</div>
+                  <div className="coach-ctx-val">{profile.goal === 'lose' ? 'Lose Weight' : profile.goal === 'gain' ? 'Gain Muscle' : 'Maintain'}</div>
+                </div>
+              </div>
+              <div className="coach-context-item">
+                <span className="coach-ctx-icon">🔥</span>
+                <div className="coach-ctx-body">
+                  <div className="coach-ctx-label">Calories</div>
+                  <div className="coach-ctx-val">{totalCalories} / {dailyGoal}</div>
+                </div>
+              </div>
+              <div className="coach-context-item">
+                <span className="coach-ctx-icon">💪</span>
+                <div className="coach-ctx-body">
+                  <div className="coach-ctx-label">Protein</div>
+                  <div className="coach-ctx-val">{totalProtein}g / {proteinGoal}g</div>
+                </div>
+              </div>
+              <div className="coach-context-item">
+                <span className="coach-ctx-icon">🏃</span>
+                <div className="coach-ctx-body">
+                  <div className="coach-ctx-label">Burned</div>
+                  <div className="coach-ctx-val">{totalBurned} cal</div>
+                </div>
+              </div>
+            </div>
+
+            {/* ── CHAT PANEL ── */}
+            <div className="coach-chat-panel">
+              <div className="chat-messages" id="chatMessages">
                 {chatHistory.length === 0 && (
                   <div className="chat-welcome">
-                    <div style={{fontSize:'40px',marginBottom:'12px'}}>🤖</div>
-                    <div style={{fontSize:'15px',fontWeight:'700',color: darkMode ? '#F0F0FF' : '#0A0A14',marginBottom:'6px'}}>Hi {currentUser}! I'm your AI Coach</div>
-                    <div style={{fontSize:'12px',color:'#9898AA',marginBottom:'20px'}}>Ask me anything about your nutrition, fitness goals, or health!</div>
+                    <div className="chat-welcome-avatar">🤖</div>
+                    <div className="chat-welcome-title">Hi {profile?.firstName || currentUser}! I'm your AI Coach</div>
+                    <div className="chat-welcome-sub">Ask me anything about your nutrition, fitness, or health journey. I have full context of your today's stats.</div>
                     <div className="quick-prompts">
-                      {quickPrompts.map((p,i) => (
-                        <button key={i} className="quick-prompt-btn" onClick={() => setAiMessage(p)}>{p}</button>
+                      {[
+                        `Am I on track for my ${profile.goal === 'lose' ? 'weight loss' : profile.goal === 'gain' ? 'muscle gain' : 'maintenance'} goal today?`,
+                        totalCalories < dailyGoal * 0.5 ? 'What should I eat to hit my calorie goal?' : 'How can I balance my remaining macros?',
+                        totalProtein < proteinGoal ? `I'm ${proteinGoal - totalProtein}g short on protein — what should I eat?` : 'What high-protein snacks would you recommend?',
+                        streak > 2 ? `I have a ${streak}-day streak — how do I keep it going?` : 'How do I build a consistent healthy habit?',
+                        'Give me a quick workout for today',
+                        'What's a healthy meal I can make tonight?',
+                      ].map((p, i) => (
+                        <button key={i} className="quick-prompt-btn" onClick={() => { setAiMessage(p); setTimeout(askAiCoach, 50); }}>{p}</button>
                       ))}
                     </div>
                   </div>
                 )}
-                {chatHistory.map((msg,i) => (
+                {chatHistory.map((msg, i) => (
                   <div key={i} className={`chat-msg ${msg.role === 'user' ? 'chat-msg-user' : 'chat-msg-ai'}`}>
-                    {msg.role === 'ai' && <div className="chat-ai-icon">🤖</div>}
+                    {msg.role === 'ai' && <div className="chat-ai-avatar">🤖</div>}
                     <div className={`chat-bubble ${msg.role === 'user' ? 'chat-bubble-user' : 'chat-bubble-ai'}`}>
-                      {msg.text}
+                      {msg.text.split('\n').map((line, li) => (
+                        <span key={li}>
+                          {line.split(/(\*\*[^*]+\*\*)/).map((part, pi) =>
+                            part.startsWith('**') && part.endsWith('**')
+                              ? <strong key={pi}>{part.slice(2,-2)}</strong>
+                              : part
+                          )}
+                          {li < msg.text.split('\n').length - 1 && <br/>}
+                        </span>
+                      ))}
                     </div>
                   </div>
                 ))}
                 {aiLoading && (
                   <div className="chat-msg chat-msg-ai">
-                    <div className="chat-ai-icon">🤖</div>
+                    <div className="chat-ai-avatar">🤖</div>
                     <div className="chat-bubble chat-bubble-ai">
                       <span className="chat-typing"><span/><span/><span/></span>
                     </div>
                   </div>
                 )}
               </div>
+
+              {chatHistory.length > 0 && (
+                <div className="coach-suggestion-chips">
+                  {['Tell me more', 'What should I eat next?', 'Give me a workout'].map((s,i) => (
+                    <button key={i} className="suggestion-chip" onClick={() => { setAiMessage(s); setTimeout(askAiCoach, 50); }}>{s}</button>
+                  ))}
+                </div>
+              )}
+
               <div className="chat-input-row">
                 <input className="chat-input" placeholder="Ask your AI coach anything..."
                   value={aiMessage} onChange={e => setAiMessage(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && askAiCoach()}/>
-                <button className="chat-send-btn" onClick={askAiCoach} disabled={aiLoading}>
-                  {aiLoading ? <span className="spinner"/> : '→'}
+                  onKeyDown={e => e.key === 'Enter' && !aiLoading && askAiCoach()}/>
+                <button className="chat-send-btn" onClick={askAiCoach} disabled={aiLoading || !aiMessage.trim()}>
+                  {aiLoading ? <span className="chat-spinner"/> : <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>}
                 </button>
               </div>
             </div>
+
           </div>
         )}
 
