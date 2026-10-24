@@ -4,6 +4,7 @@ import lifeos_backend.model.CustomFood;
 import lifeos_backend.model.FoodLog;
 import lifeos_backend.repository.CustomFoodRepository;
 import lifeos_backend.repository.FoodLogRepository;
+import lifeos_backend.repository.UserRepository;
 import lifeos_backend.service.JwtService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -21,9 +22,12 @@ public class CustomFoodController {
     @Autowired private CustomFoodRepository customFoodRepository;
     @Autowired private FoodLogRepository foodLogRepository;
     @Autowired private JwtService jwtService;
+    @Autowired private UserRepository userRepository;
 
     private Long getUserId(String auth) {
-        return jwtService.extractEmail(auth.replace("Bearer ", ""));
+        String email = jwtService.extractEmail(auth.replace("Bearer ", ""));
+        return userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found")).getId();
     }
 
     @GetMapping
