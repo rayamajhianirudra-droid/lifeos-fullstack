@@ -20,7 +20,7 @@ public class SleepController {
     @Autowired private JwtService jwtService;
 
     private Long getUserId(String auth) {
-        return jwtService.extractUserId(auth.replace("Bearer ", ""));
+        return jwtService.extractEmail(auth.replace("Bearer ", ""));
     }
 
     @GetMapping
