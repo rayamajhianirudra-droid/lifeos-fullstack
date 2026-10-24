@@ -1417,9 +1417,7 @@ function App() {
                       <div style={{display:'flex',gap:'6px'}}>
                         <button className="log-btn" onClick={()=>logCustomFood(cf)}>+ Log</button>
                         <button onClick={()=>deleteCustomFood(cf.id)}
-                          style={{background:'transparent',border:'none',cursor:'pointer',fontSize:'14px',color:'#ccc'}}
-                          onMouseOver={e=>e.target.style.color='#E85A5A'}
-                          onMouseOut={e=>e.target.style.color='#ccc'}>🗑️</button>
+                          className="delete-btn">🗑️</button>
                       </div>
                     </div>
                   ))}
@@ -1731,11 +1729,11 @@ function App() {
           <div className="tab-content">
             <div className="progress-card">
               <h3>🏆 Achievements</h3>
-              <p style={{fontSize:'12px',color:'#9898AA',marginBottom:'12px'}}>{unlockedCount} of {achievements.length} unlocked</p>
+              <p className="tab-sub-label">{unlockedCount} of {achievements.length} unlocked</p>
               <div className="achievements-progress-bar">
                 <div className="achievements-progress-fill" style={{width:`${(unlockedCount/achievements.length)*100}%`}}/>
               </div>
-              <div style={{fontSize:'11px',color:'#9898AA',marginTop:'6px',textAlign:'right'}}>{Math.round((unlockedCount/achievements.length)*100)}% complete</div>
+              <div className="tab-micro-label" style={{textAlign:'right'}}>{Math.round((unlockedCount/achievements.length)*100)}% complete</div>
             </div>
             <div className="achievements-grid">
               {achievements.map(a => (
@@ -1995,11 +1993,11 @@ function App() {
               </div>
               <div className="profile-field-full" style={{marginTop:'8px'}}>
   <label>Meal Reminders</label>
-  <div style={{marginTop:'10px',padding:'14px',background: darkMode ? 'rgba(255,255,255,.04)' : '#F7F7FA',borderRadius:'12px',border: darkMode ? '.5px solid rgba(255,255,255,.06)' : '.5px solid #EBEBF0'}}>
+  <div className="notif-settings-card">
     <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
       <div>
-        <div style={{fontSize:'13px',fontWeight:'600',color: darkMode ? '#F0F0FF' : '#0A0A14'}}>Push Notifications</div>
-        <div style={{fontSize:'11px',color:'#9898AA',marginTop:'2px'}}>Breakfast 8AM · Lunch 12PM · Dinner 6PM</div>
+        <div className="notif-settings-title">Push Notifications</div>
+        <div className="tab-micro-label">Breakfast 8AM · Lunch 12PM · Dinner 6PM</div>
       </div>
       <button
         onClick={async () => {
@@ -2077,7 +2075,7 @@ function App() {
                     <div key={s.id} className="weight-item">
                       <div>
                         <div style={{fontSize:'13px',fontWeight:'600'}}>{s.hoursSlept}h · {s.quality}</div>
-                        <div style={{fontSize:'11px',color:'#9898AA',marginTop:'2px'}}>
+                        <div className="tab-micro-label">
                           {new Date(s.date).toLocaleDateString('en-US',{month:'short',day:'numeric'})}
                           {s.bedtime && ` · ${s.bedtime}–${s.wakeTime}`}
                         </div>
@@ -2103,7 +2101,7 @@ function App() {
               <h3 className="log-title">😊 Mood Tracker</h3>
               <p className="log-sub">Track your emotional wellbeing alongside your physical health</p>
               <div style={{marginBottom:'16px'}}>
-                <label style={{fontSize:'12px',fontWeight:'600',color:'#555',display:'block',marginBottom:'10px'}}>How are you feeling today? ({moodScore}/10)</label>
+                <label className="mood-slider-label">How are you feeling today? ({moodScore}/10)</label>
                 <div style={{display:'flex',alignItems:'center',gap:'12px'}}>
                   <span style={{fontSize:'28px'}}>{['','😭','😢','😟','😕','😐','🙂','😊','😄','🤩','🥳'][moodScore]}</span>
                   <input type="range" min="1" max="10" value={moodScore}
@@ -2159,10 +2157,10 @@ function App() {
                           <span style={{fontSize:'20px'}}>{['','😭','😢','😟','😕','😐','🙂','😊','😄','🤩','🥳'][m.moodScore]}</span>
                           <span style={{fontSize:'13px',fontWeight:'600'}}>{m.moodLabel} ({m.moodScore}/10)</span>
                         </div>
-                        <div style={{fontSize:'11px',color:'#9898AA',marginTop:'3px'}}>
+                        <div className="tab-micro-label">
                           {new Date(m.date).toLocaleDateString('en-US',{month:'short',day:'numeric'})} · Energy: {m.energyLevel} · Stress: {m.stressLevel}
                         </div>
-                        {m.notes && <div style={{fontSize:'11px',color:'#555',marginTop:'2px',fontStyle:'italic'}}>"{m.notes}"</div>}
+                        {m.notes && <div className="tab-micro-label" style={{fontStyle:'italic'}}>"{m.notes}"</div>}
                       </div>
                       <button onClick={()=>deleteMood(m.id)} className="delete-btn">🗑️</button>
                     </div>
@@ -2208,7 +2206,7 @@ function App() {
             {supplementLogs.length > 0 && (
               <div className="progress-card">
                 <h3>💊 Today's Supplements</h3>
-                <p style={{fontSize:'12px',color:'#9898AA',marginBottom:'12px'}}>
+                <p className="tab-sub-label">
                   {supplementLogs.filter(s=>s.date===new Date().toISOString().split('T')[0]).length} taken today
                 </p>
                 <div className="weight-list">
@@ -2216,18 +2214,16 @@ function App() {
                     <div key={s.id} className="weight-item">
                       <div>
                         <div style={{fontSize:'13px',fontWeight:'600'}}>{s.supplementName}</div>
-                        <div style={{fontSize:'11px',color:'#9898AA',marginTop:'2px'}}>
+                        <div className="tab-micro-label">
                           {s.dosage}{s.unit} · {s.timeOfDay?.replace('_',' ')} · {new Date(s.date).toLocaleDateString('en-US',{month:'short',day:'numeric'})}
                         </div>
                       </div>
                       <div style={{display:'flex',alignItems:'center',gap:'10px'}}>
-                        <span style={{fontSize:'11px',fontWeight:'600',color:'#5B4FD4',background:'#F0EFFD',padding:'2px 8px',borderRadius:'20px'}}>
+                        <span className="supp-logged-pill">
                           ✓ Logged
                         </span>
                         <button onClick={()=>deleteSupplement(s.id)}
-                          style={{background:'transparent',border:'none',cursor:'pointer',fontSize:'14px',color:'#ccc'}}
-                          onMouseOver={e=>e.target.style.color='#E85A5A'}
-                          onMouseOut={e=>e.target.style.color='#ccc'}>🗑️</button>
+                          className="delete-btn">🗑️</button>
                       </div>
                     </div>
                   ))}
