@@ -46,7 +46,7 @@ public class WeeklyReportService {
         // Total calories logged this week
         double totalCalories = foodLogRepository.findByUserId(userId).stream()
                 .filter(fl -> !fl.getDate().isBefore(weekAgo) && !fl.getDate().isAfter(today))
-                .mapToDouble(fl -> fl.getCalories() != null ? fl.getCalories() : 0.0)
+                .mapToDouble(fl -> fl.getCalories())
                 .sum();
 
         Map<String, Object> report = new HashMap<>();
