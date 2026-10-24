@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import './App.css';
 
 const API = process.env.REACT_APP_API_URL || 'http://localhost:8080/api';
@@ -1488,160 +1488,217 @@ function App() {
         {/* PROGRESS */}
         {activeTab === 'progress' && (
           <div className="tab-content">
-            <div className="progress-card">
-              <h3>Today's Summary</h3>
-              <div className="progress-stats">
-                <div className="progress-stat"><span className="progress-stat-num">{foodLogs.length}</span><span className="progress-stat-label">Foods Logged</span></div>
-                <div className="progress-stat"><span className="progress-stat-num">{totalCalories}</span><span className="progress-stat-label">Calories Eaten</span></div>
-                <div className="progress-stat"><span className="progress-stat-num">{totalProtein}g</span><span className="progress-stat-label">Total Protein</span></div>
-                <div className="progress-stat"><span className="progress-stat-num">🔥{streak}</span><span className="progress-stat-label">Day Streak</span></div>
+
+            {/* ── ANALYTICS HEADER ── */}
+            <div className="analytics-header">
+              <div className="analytics-title-row">
+                <div>
+                  <div className="analytics-title">Analytics</div>
+                  <div className="analytics-subtitle">Track your health journey</div>
+                </div>
+                <div className="range-tabs">
+                  {['7D','30D','90D'].map(r => (
+                    <button key={r}
+                      className={`range-tab${chartRange === r ? ' range-tab-active' : ''}`}
+                      onClick={() => setChartRange(r)}>{r}</button>
+                  ))}
+                </div>
               </div>
             </div>
 
-            {/* DAILY CALORIE HISTORY - LAST 30 DAYS */}
-            <div className="progress-card">
-              <h3>📊 Daily Calorie History</h3>
-              <p style={{fontSize:'12px',color:'#9898AA',marginBottom:'16px'}}>Last 30 days of calorie intake</p>
-              {dailyHistory.length === 0 ? (
-                <div className="empty-state">
-                  <span>📊</span>
-                  <p>Log some food to see your calorie history</p>
+            {/* ── SUMMARY STAT ROW ── */}
+            <div className="analytics-summary-row">
+              <div className="analytics-stat">
+                <div className="analytics-stat-val">{foodLogs.length}</div>
+                <div className="analytics-stat-label">Foods Logged</div>
+              </div>
+              <div className="analytics-stat analytics-stat-divider">
+                <div className="analytics-stat-val" style={{color:'var(--color-primary)'}}>{totalCalories}</div>
+                <div className="analytics-stat-label">Calories</div>
+              </div>
+              <div className="analytics-stat analytics-stat-divider">
+                <div className="analytics-stat-val" style={{color:'var(--color-nutrition)'}}>{totalProtein}g</div>
+                <div className="analytics-stat-label">Protein</div>
+              </div>
+              <div className="analytics-stat analytics-stat-divider">
+                <div className="analytics-stat-val" style={{color:'var(--color-activity)'}}>🔥{streak}</div>
+                <div className="analytics-stat-label">Day Streak</div>
+              </div>
+            </div>
+
+            {/* ── CALORIE TREND ── */}
+            <div className="analytics-card">
+              <div className="analytics-card-header">
+                <div>
+                  <div className="analytics-card-title">📊 Calorie Trend</div>
+                  <div className="analytics-card-sub">Daily intake — last {chartRange === '7D' ? '7' : chartRange === '30D' ? '30' : '90'} days</div>
                 </div>
+                <div className="analytics-card-badge">{dailyHistory.length} days</div>
+              </div>
+              {dailyHistory.length === 0 ? (
+                <div className="empty-state"><span>📊</span><p>Log food to see your trend</p></div>
               ) : (
-                <ResponsiveContainer width="100%" height={220}>
-                  <LineChart data={dailyHistory}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#F0F0F4" vertical={false}/>
-                    <XAxis dataKey="day" tick={{fontSize:10,fill:'#9898AA'}} axisLine={false} tickLine={false}
-                      interval={Math.max(0, Math.floor(dailyHistory.length / 8))}/>
-                    <YAxis tick={{fontSize:11,fill:'#9898AA'}} axisLine={false} tickLine={false}/>
+                <ResponsiveContainer width="100%" height={200}>
+                  <AreaChart data={chartRange === '7D' ? dailyHistory.slice(-7) : chartRange === '30D' ? dailyHistory.slice(-30) : dailyHistory}>
+                    <defs>
+                      <linearGradient id="calGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#5B4FD4" stopOpacity={0.15}/>
+                        <stop offset="95%" stopColor="#5B4FD4" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-light)" vertical={false}/>
+                    <XAxis dataKey="day" tick={{fontSize:10,fill:'var(--color-ink-tertiary)'}} axisLine={false} tickLine={false}
+                      interval={Math.max(0, Math.floor(dailyHistory.length / 6))}/>
+                    <YAxis tick={{fontSize:10,fill:'var(--color-ink-tertiary)'}} axisLine={false} tickLine={false} width={36}/>
                     <Tooltip {...tooltipStyle}
-                      formatter={(value, name) => [`${value} cal`, 'Calories']}
-                      labelFormatter={(label, payload) => payload && payload[0] ? payload[0].payload.date : label}/>
-                    <Line type="monotone" dataKey="calories" stroke="#5B4FD4" strokeWidth={2.5}
-                      dot={{fill:'#5B4FD4',strokeWidth:0,r:2}} activeDot={{r:5}} name="Calories"/>
-                  </LineChart>
+                      formatter={(v) => [`${v} cal`, 'Calories']}
+                      labelFormatter={(label, payload) => payload?.[0]?.payload?.date || label}/>
+                    <Area type="monotone" dataKey="calories" stroke="#5B4FD4" strokeWidth={2.5}
+                      fill="url(#calGrad)" dot={false} activeDot={{r:5,fill:'#5B4FD4'}} name="Calories"/>
+                  </AreaChart>
                 </ResponsiveContainer>
               )}
             </div>
 
-            {/* MACRO PIE CHART */}
-            <div className="progress-card">
-              <h3>🥧 Today's Macro Breakdown</h3>
-              <p style={{fontSize:'12px',color:'#9898AA',marginBottom:'16px'}}>Visual breakdown of your macros today</p>
-              {totalCalories === 0 ? (
-                <div className="empty-state">
-                  <span>🥧</span>
-                  <p>Log some food to see your macro breakdown</p>
+            {/* ── MACRO DONUT ── */}
+            <div className="analytics-card">
+              <div className="analytics-card-header">
+                <div>
+                  <div className="analytics-card-title">🥧 Macro Breakdown</div>
+                  <div className="analytics-card-sub">Today's distribution</div>
                 </div>
+              </div>
+              {totalCalories === 0 ? (
+                <div className="empty-state"><span>🥧</span><p>Log food to see macros</p></div>
               ) : (
-                <div style={{display:'flex',alignItems:'center',gap:'24px',flexWrap:'wrap'}}>
-                  <ResponsiveContainer width={200} height={200}>
+                <div className="macro-donut-layout">
+                  <ResponsiveContainer width={160} height={160}>
                     <PieChart>
-                      <Pie data={pieData} cx="50%" cy="50%" innerRadius={55} outerRadius={85}
-                        paddingAngle={3} dataKey="value">
-                        {pieData.map((_, index) => (
-                          <Cell key={index} fill={pieColors[index]}/>
-                        ))}
+                      <Pie data={pieData} cx="50%" cy="50%" innerRadius={48} outerRadius={72}
+                        paddingAngle={3} dataKey="value" startAngle={90} endAngle={-270}>
+                        {pieData.map((_, i) => <Cell key={i} fill={pieColors[i]}/>)}
                       </Pie>
                       <Tooltip
-                        formatter={(value, name, props) => [`${props.payload.grams}g (${value} cal)`, name]}
-                        contentStyle={{background: darkMode ? '#1a1a2e' : '#fff', border: darkMode ? '1px solid rgba(255,255,255,.1)' : '.5px solid #EBEBF0', borderRadius:'12px', fontSize:'12px'}}
-                      />
+                        formatter={(v, n, p) => [`${p.payload.grams}g (${v} cal)`, n]}
+                        contentStyle={{background:'var(--color-surface)',border:'.5px solid var(--color-border)',borderRadius:'12px',fontSize:'12px'}}/>
                     </PieChart>
                   </ResponsiveContainer>
-                  <div style={{flex:1,display:'flex',flexDirection:'column',gap:'12px',minWidth:'160px'}}>
+                  <div className="macro-donut-legend">
                     {pieData.map((m, i) => (
-                      <div key={m.name} style={{display:'flex',alignItems:'center',gap:'10px'}}>
-                        <div style={{width:'10px',height:'10px',borderRadius:'50%',background:pieColors[i],flexShrink:0}}/>
-                        <div style={{flex:1}}>
-                          <div style={{display:'flex',justifyContent:'space-between',marginBottom:'4px'}}>
-                            <span style={{fontSize:'12px',fontWeight:'600',color: darkMode ? '#F0F0FF' : '#0A0A14'}}>{m.name}</span>
-                            <span style={{fontSize:'11px',color:'#9898AA'}}>{m.grams}g · {m.pct}%</span>
-                          </div>
-                          <div style={{height:'4px',background: darkMode ? 'rgba(255,255,255,.08)' : '#F0F0F4',borderRadius:'2px',overflow:'hidden'}}>
-                            <div style={{height:'100%',width:`${m.pct}%`,background:pieColors[i],borderRadius:'2px'}}/>
-                          </div>
+                      <div key={m.name} className="macro-legend-row">
+                        <div className="macro-legend-dot" style={{background:pieColors[i]}}/>
+                        <div className="macro-legend-info">
+                          <div className="macro-legend-name">{m.name}</div>
+                          <div className="macro-legend-val">{m.grams}g · {m.pct}%</div>
+                        </div>
+                        <div className="macro-legend-bar-wrap">
+                          <div className="macro-legend-bar" style={{width:`${m.pct}%`,background:pieColors[i]}}/>
                         </div>
                       </div>
                     ))}
-                    <div style={{marginTop:'4px',padding:'10px 12px',background: darkMode ? 'rgba(255,255,255,.04)' : '#F7F7FA',borderRadius:'10px',border: darkMode ? '.5px solid rgba(255,255,255,.06)' : '.5px solid #EBEBF0'}}>
-                      <div style={{fontSize:'11px',color:'#9898AA',marginBottom:'2px'}}>Total Calories</div>
-                      <div style={{fontSize:'15px',fontWeight:'700',color: darkMode ? '#F0F0FF' : '#0A0A14'}}>{totalCalories} kcal</div>
+                    <div className="macro-total-pill">
+                      <span className="macro-total-label">Total</span>
+                      <span className="macro-total-val">{totalCalories} kcal</span>
                     </div>
                   </div>
                 </div>
               )}
             </div>
 
-            <div className="progress-card">
-              <h3>📈 Weekly Calories</h3>
-              <p style={{fontSize:'12px',color:'#9898AA',marginBottom:'16px'}}>Last 7 days calorie intake</p>
+            {/* ── WEEKLY MULTI-MACRO CHART ── */}
+            <div className="analytics-card">
+              <div className="analytics-card-header">
+                <div>
+                  <div className="analytics-card-title">💪 Macro Trends</div>
+                  <div className="analytics-card-sub">Protein · Carbs · Fat — last {chartRange === '7D' ? '7' : chartRange === '30D' ? '30' : '90'} days</div>
+                </div>
+                <div className="chart-legend-pills">
+                  <span className="legend-pill" style={{background:'rgba(91,79,212,.1)',color:'#5B4FD4'}}>P</span>
+                  <span className="legend-pill" style={{background:'rgba(29,158,117,.1)',color:'#1D9E75'}}>C</span>
+                  <span className="legend-pill" style={{background:'rgba(232,130,12,.1)',color:'#E8820C'}}>F</span>
+                </div>
+              </div>
               <ResponsiveContainer width="100%" height={200}>
-                <LineChart data={weeklyData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#F0F0F4" vertical={false}/>
-                  <XAxis dataKey="day" tick={{fontSize:11,fill:'#9898AA'}} axisLine={false} tickLine={false}/>
-                  <YAxis tick={{fontSize:11,fill:'#9898AA'}} axisLine={false} tickLine={false}/>
+                <LineChart data={chartRange === '7D' ? weeklyData : chartRange === '30D' ? dailyHistory.slice(-30) : dailyHistory}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-light)" vertical={false}/>
+                  <XAxis dataKey="day" tick={{fontSize:10,fill:'var(--color-ink-tertiary)'}} axisLine={false} tickLine={false}/>
+                  <YAxis tick={{fontSize:10,fill:'var(--color-ink-tertiary)'}} axisLine={false} tickLine={false} width={28}/>
                   <Tooltip {...tooltipStyle}/>
-                  <Line type="monotone" dataKey="calories" stroke="#5B4FD4" strokeWidth={2.5}
-                    dot={{fill:'#5B4FD4',strokeWidth:0,r:4}} activeDot={{r:6}} name="Calories"/>
+                  <Line type="monotone" dataKey="protein" stroke="#5B4FD4" strokeWidth={2} dot={false} activeDot={{r:4}} name="Protein (g)"/>
+                  <Line type="monotone" dataKey="carbs" stroke="#1D9E75" strokeWidth={2} dot={false} activeDot={{r:4}} name="Carbs (g)"/>
+                  <Line type="monotone" dataKey="fat" stroke="#E8820C" strokeWidth={2} dot={false} activeDot={{r:4}} name="Fat (g)"/>
                 </LineChart>
               </ResponsiveContainer>
             </div>
-            <div className="progress-card">
-              <h3>💪 Weekly Macros</h3>
-              <p style={{fontSize:'12px',color:'#9898AA',marginBottom:'16px'}}>Protein, Carbs and Fat — last 7 days</p>
-              <ResponsiveContainer width="100%" height={200}>
-                <LineChart data={weeklyData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#F0F0F4" vertical={false}/>
-                  <XAxis dataKey="day" tick={{fontSize:11,fill:'#9898AA'}} axisLine={false} tickLine={false}/>
-                  <YAxis tick={{fontSize:11,fill:'#9898AA'}} axisLine={false} tickLine={false}/>
-                  <Tooltip {...tooltipStyle}/>
-                  <Line type="monotone" dataKey="protein" stroke="#5B4FD4" strokeWidth={2.5} dot={{fill:'#5B4FD4',strokeWidth:0,r:3}} activeDot={{r:5}} name="Protein (g)"/>
-                  <Line type="monotone" dataKey="carbs" stroke="#1D9E75" strokeWidth={2.5} dot={{fill:'#1D9E75',strokeWidth:0,r:3}} activeDot={{r:5}} name="Carbs (g)"/>
-                  <Line type="monotone" dataKey="fat" stroke="#E8820C" strokeWidth={2.5} dot={{fill:'#E8820C',strokeWidth:0,r:3}} activeDot={{r:5}} name="Fat (g)"/>
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
+
+            {/* ── WEIGHT TREND ── */}
             {weightLogs.length > 1 && (
-              <div className="progress-card">
-                <h3>⚖️ Weight Trend</h3>
-                <p style={{fontSize:'12px',color:'#9898AA',marginBottom:'16px'}}>Your weight journey over time</p>
-                <ResponsiveContainer width="100%" height={200}>
-                  <LineChart data={[...weightLogs].reverse().slice(-7).map(w => ({
+              <div className="analytics-card">
+                <div className="analytics-card-header">
+                  <div>
+                    <div className="analytics-card-title">⚖️ Weight Trend</div>
+                    <div className="analytics-card-sub">Your journey over time</div>
+                  </div>
+                  <div className={`weight-delta-badge ${weightLogs[0].weightLbs <= weightLogs[weightLogs.length-1].weightLbs ? 'weight-delta-down' : 'weight-delta-up'}`}>
+                    {weightLogs[0].weightLbs <= weightLogs[weightLogs.length-1].weightLbs
+                      ? `📉 −${(weightLogs[weightLogs.length-1].weightLbs - weightLogs[0].weightLbs).toFixed(1)} lbs`
+                      : `📈 +${(weightLogs[0].weightLbs - weightLogs[weightLogs.length-1].weightLbs).toFixed(1)} lbs`}
+                  </div>
+                </div>
+                <ResponsiveContainer width="100%" height={180}>
+                  <AreaChart data={[...weightLogs].reverse().slice(-(chartRange === '7D' ? 7 : chartRange === '30D' ? 30 : 90)).map(w => ({
                     date: new Date(w.date).toLocaleDateString('en-US',{month:'short',day:'numeric'}),
                     weight: w.weightLbs
                   }))}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#F0F0F4" vertical={false}/>
-                    <XAxis dataKey="date" tick={{fontSize:11,fill:'#9898AA'}} axisLine={false} tickLine={false}/>
-                    <YAxis tick={{fontSize:11,fill:'#9898AA'}} axisLine={false} tickLine={false} domain={['dataMin - 2','dataMax + 2']}/>
+                    <defs>
+                      <linearGradient id="weightGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#1D9E75" stopOpacity={0.15}/>
+                        <stop offset="95%" stopColor="#1D9E75" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-light)" vertical={false}/>
+                    <XAxis dataKey="date" tick={{fontSize:10,fill:'var(--color-ink-tertiary)'}} axisLine={false} tickLine={false}/>
+                    <YAxis tick={{fontSize:10,fill:'var(--color-ink-tertiary)'}} axisLine={false} tickLine={false} domain={['dataMin - 2','dataMax + 2']} width={36}/>
                     <Tooltip {...tooltipStyle}/>
-                    <Line type="monotone" dataKey="weight" stroke="#1D9E75" strokeWidth={2.5}
-                      dot={{fill:'#1D9E75',strokeWidth:0,r:4}} activeDot={{r:6}} name="Weight (lbs)"/>
-                  </LineChart>
+                    <Area type="monotone" dataKey="weight" stroke="#1D9E75" strokeWidth={2.5}
+                      fill="url(#weightGrad)" dot={false} activeDot={{r:5,fill:'#1D9E75'}} name="Weight (lbs)"/>
+                  </AreaChart>
                 </ResponsiveContainer>
-                <div className="weight-change">
-                  {weightLogs[0].weightLbs < weightLogs[weightLogs.length-1].weightLbs
-                    ? `📉 Lost ${(weightLogs[weightLogs.length-1].weightLbs - weightLogs[0].weightLbs).toFixed(1)} lbs total`
-                    : `📈 Gained ${(weightLogs[0].weightLbs - weightLogs[weightLogs.length-1].weightLbs).toFixed(1)} lbs total`}
-                </div>
               </div>
             )}
-            <div className="progress-card">
-              <h3>Goal Progress</h3>
+
+            {/* ── GOAL PROGRESS ── */}
+            <div className="analytics-card">
+              <div className="analytics-card-header">
+                <div className="analytics-card-title">🎯 Today's Goals</div>
+              </div>
               {[
-                {label:'Calories',val:totalCalories,goal:dailyGoal,unit:'cal'},
-                {label:'Protein',val:totalProtein,goal:proteinGoal,unit:'g'},
-                {label:'Carbs',val:totalCarbs,goal:carbsGoal,unit:'g'},
-                {label:'Fat',val:totalFat,goal:fatGoal,unit:'g'},
-              ].map(item => (
-                <div key={item.label} className="progress-bar-section">
-                  <div className="progress-bar-label"><span>{item.label}</span><span>{item.val} / {item.goal}{item.unit}</span></div>
-                  <div className="progress-bar-bg"><div className="progress-bar-fill" style={{width:`${Math.min((item.val/item.goal)*100,100)}%`}}/></div>
-                </div>
-              ))}
+                {label:'Calories',val:totalCalories,goal:dailyGoal,unit:'cal',color:'var(--color-primary)'},
+                {label:'Protein',val:totalProtein,goal:proteinGoal,unit:'g',color:'#5B4FD4'},
+                {label:'Carbs',val:totalCarbs,goal:carbsGoal,unit:'g',color:'var(--color-nutrition)'},
+                {label:'Fat',val:totalFat,goal:fatGoal,unit:'g',color:'var(--color-activity)'},
+              ].map(item => {
+                const pct = Math.min(Math.round((item.val / item.goal) * 100), 100);
+                return (
+                  <div key={item.label} className="goal-bar-row">
+                    <div className="goal-bar-meta">
+                      <span className="goal-bar-name">{item.label}</span>
+                      <span className="goal-bar-nums">{item.val} / {item.goal}{item.unit}</span>
+                      <span className="goal-bar-pct" style={{color:item.color}}>{pct}%</span>
+                    </div>
+                    <div className="goal-bar-track">
+                      <div className="goal-bar-fill" style={{width:`${pct}%`,background:item.color}}/>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
-            <div className="progress-card">
-              <h3>⚖️ Log Weight</h3>
+
+            {/* ── LOG WEIGHT ── */}
+            <div className="analytics-card">
+              <div className="analytics-card-header">
+                <div className="analytics-card-title">⚖️ Log Weight</div>
+              </div>
               <div className="weight-input-row">
                 <input type="number" className="weight-input" placeholder="Enter weight (lbs)"
                   value={weightLbs} onChange={e => setWeightLbs(e.target.value)}
@@ -1657,14 +1714,15 @@ function App() {
                       <span className="weight-date">{new Date(w.date).toLocaleDateString('en-US',{month:'short',day:'numeric'})}</span>
                       <span className="weight-val">{w.weightLbs} lbs</span>
                       <button onClick={() => deleteWeight(w.id)}
-                        style={{background:'transparent',border:'none',color:'#E4E4EC',cursor:'pointer',fontSize:'14px'}}
-                        onMouseOver={e=>e.target.style.color='#E85A5A'}
-                        onMouseOut={e=>e.target.style.color='#E4E4EC'}>🗑️</button>
+                        className="weight-delete-btn"
+                        onMouseOver={e=>e.currentTarget.style.color='var(--color-danger)'}
+                        onMouseOut={e=>e.currentTarget.style.color='var(--color-border)'}>🗑️</button>
                     </div>
                   ))}
                 </div>
               )}
             </div>
+
           </div>
         )}
 

@@ -738,27 +738,111 @@ body{
 }
 .log-btn:hover{background:#5B4FD4;transform:translateY(-1px)}
 
-/* ─── PROGRESS TAB ─── */
+/* ─── STAGE 4: ANALYTICS / PROGRESS TAB ─── */
+.analytics-header{
+  background:var(--color-surface);border-radius:var(--radius-2xl);
+  padding:18px 20px;border:.5px solid var(--color-border);
+  margin-bottom:var(--space-3);animation:fadeUp .3s ease both;
+  box-shadow:var(--shadow-xs);
+}
+.analytics-title-row{display:flex;justify-content:space-between;align-items:center}
+.analytics-title{font-size:var(--text-lg);font-weight:var(--fw-bold);color:var(--color-ink);letter-spacing:-.3px}
+.analytics-subtitle{font-size:var(--text-xs);color:var(--color-ink-secondary);margin-top:2px}
+
+.range-tabs{display:flex;gap:4px;background:var(--color-surface-sunken);border-radius:var(--radius-md);padding:3px}
+.range-tab{
+  font-size:var(--text-xs);font-weight:var(--fw-semibold);
+  padding:5px 10px;border-radius:var(--radius-sm);border:none;
+  background:transparent;color:var(--color-ink-secondary);
+  cursor:pointer;transition:var(--transition-base);
+}
+.range-tab-active{
+  background:var(--color-surface);color:var(--color-primary);
+  box-shadow:var(--shadow-xs);
+}
+
+.analytics-summary-row{
+  display:flex;background:var(--color-surface);border-radius:var(--radius-2xl);
+  border:.5px solid var(--color-border);margin-bottom:var(--space-3);
+  padding:16px 0;animation:fadeUp .3s ease .05s both;
+  box-shadow:var(--shadow-xs);
+}
+.analytics-stat{flex:1;text-align:center;padding:0 8px}
+.analytics-stat-divider{border-left:.5px solid var(--color-border-light)}
+.analytics-stat-val{font-size:var(--text-2xl);font-weight:var(--fw-bold);color:var(--color-ink);letter-spacing:-.5px;line-height:1}
+.analytics-stat-label{font-size:var(--text-xs);color:var(--color-ink-secondary);margin-top:4px;font-weight:var(--fw-medium)}
+
+.analytics-card{
+  background:var(--color-surface);border-radius:var(--radius-2xl);
+  padding:20px;border:.5px solid var(--color-border);
+  margin-bottom:var(--space-3);animation:fadeUp .35s ease .08s both;
+  box-shadow:var(--shadow-xs);
+}
+.analytics-card-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px}
+.analytics-card-title{font-size:var(--text-base);font-weight:var(--fw-bold);color:var(--color-ink);letter-spacing:-.2px}
+.analytics-card-sub{font-size:var(--text-xs);color:var(--color-ink-secondary);margin-top:3px}
+.analytics-card-badge{
+  font-size:var(--text-xs);font-weight:var(--fw-semibold);
+  background:var(--color-primary-light);color:var(--color-primary);
+  padding:3px 10px;border-radius:var(--radius-full);flex-shrink:0;
+}
+
+.chart-legend-pills{display:flex;gap:4px}
+.legend-pill{
+  width:22px;height:22px;border-radius:var(--radius-sm);
+  display:flex;align-items:center;justify-content:center;
+  font-size:var(--text-xs);font-weight:var(--fw-bold);
+}
+
+/* macro donut */
+.macro-donut-layout{display:flex;align-items:center;gap:20px;flex-wrap:wrap}
+.macro-donut-legend{flex:1;display:flex;flex-direction:column;gap:10px;min-width:140px}
+.macro-legend-row{display:flex;align-items:center;gap:10px}
+.macro-legend-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+.macro-legend-info{flex:1;min-width:0}
+.macro-legend-name{font-size:var(--text-sm);font-weight:var(--fw-semibold);color:var(--color-ink)}
+.macro-legend-val{font-size:var(--text-xs);color:var(--color-ink-secondary);margin-top:1px}
+.macro-legend-bar-wrap{width:60px;height:4px;background:var(--color-surface-sunken);border-radius:var(--radius-full);overflow:hidden;flex-shrink:0}
+.macro-legend-bar{height:100%;border-radius:var(--radius-full);transition:width .5s ease}
+.macro-total-pill{
+  display:flex;justify-content:space-between;align-items:center;
+  background:var(--color-surface-raised);border:.5px solid var(--color-border);
+  border-radius:var(--radius-md);padding:8px 12px;margin-top:4px;
+}
+.macro-total-label{font-size:var(--text-xs);color:var(--color-ink-secondary)}
+.macro-total-val{font-size:var(--text-base);font-weight:var(--fw-bold);color:var(--color-ink)}
+
+/* goal bars */
+.goal-bar-row{margin-bottom:14px}
+.goal-bar-meta{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.goal-bar-name{font-size:var(--text-sm);font-weight:var(--fw-semibold);color:var(--color-ink);flex:1}
+.goal-bar-nums{font-size:var(--text-xs);color:var(--color-ink-secondary)}
+.goal-bar-pct{font-size:var(--text-xs);font-weight:var(--fw-bold);min-width:30px;text-align:right}
+.goal-bar-track{height:6px;background:var(--color-surface-sunken);border-radius:var(--radius-full);overflow:hidden}
+.goal-bar-fill{height:100%;border-radius:var(--radius-full);transition:width .6s ease}
+
+/* weight delta badge */
+.weight-delta-badge{
+  font-size:var(--text-xs);font-weight:var(--fw-semibold);
+  padding:4px 10px;border-radius:var(--radius-full);flex-shrink:0;
+}
+.weight-delta-down{background:var(--color-nutrition-bg);color:var(--color-nutrition)}
+.weight-delta-up{background:var(--color-activity-bg);color:var(--color-activity)}
+.weight-delete-btn{background:transparent;border:none;color:var(--color-border);cursor:pointer;font-size:14px;transition:var(--transition-base)}
+
+/* keep old progress-card for backwards compat (hidden sections may still use it) */
 .progress-card{
-  background:#fff;border-radius:20px;padding:24px;
-  border:.5px solid #EBEBF0;animation:fadeUp .4s ease .1s both;
+  background:var(--color-surface);border-radius:var(--radius-2xl);padding:20px;
+  border:.5px solid var(--color-border);animation:fadeUp .4s ease .1s both;
+  box-shadow:var(--shadow-xs);margin-bottom:var(--space-3);
 }
-.progress-card h3{font-size:15px;font-weight:700;color:#0A0A14;margin-bottom:20px;letter-spacing:-.2px}
-.progress-stats{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.progress-stat{
-  background:#F7F7FA;border-radius:14px;padding:16px;
-  text-align:center;border:.5px solid #EBEBF0;
-  transition:all .2s;cursor:pointer;
-}
-.progress-stat:hover{border-color:#5B4FD4;background:#F0EFFD}
-.progress-stat-num{display:block;font-size:26px;font-weight:700;color:#5B4FD4;margin-bottom:4px;letter-spacing:-.5px}
-.progress-stat-label{font-size:10px;color:#9898AA;text-transform:uppercase;letter-spacing:.5px}
+.progress-card h3{font-size:var(--text-base);font-weight:var(--fw-bold);color:var(--color-ink);margin-bottom:var(--space-4);letter-spacing:-.2px}
 .progress-bar-section{margin-bottom:16px}
-.progress-bar-label{display:flex;justify-content:space-between;font-size:12px;color:#8888A0;margin-bottom:8px;font-weight:500}
-.progress-bar-bg{height:6px;background:#F0F0F4;border-radius:4px;overflow:hidden}
+.progress-bar-label{display:flex;justify-content:space-between;font-size:var(--text-sm);color:var(--color-ink-secondary);margin-bottom:8px;font-weight:var(--fw-medium)}
+.progress-bar-bg{height:6px;background:var(--color-surface-sunken);border-radius:var(--radius-full);overflow:hidden}
 .progress-bar-fill{
-  height:100%;background:linear-gradient(90deg,#5B4FD4,#9F8FFF);
-  border-radius:4px;transition:width .5s ease;
+  height:100%;background:linear-gradient(90deg,var(--color-primary),#9F8FFF);
+  border-radius:var(--radius-full);transition:width .5s ease;
 }
 
 /* ─── WEIGHT TRACKER ─── */
