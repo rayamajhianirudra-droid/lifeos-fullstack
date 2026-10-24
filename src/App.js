@@ -1781,8 +1781,8 @@ function App() {
               <div className="progress-card">
                 <h3>Latest Reading</h3>
                 <div style={{textAlign:'center',padding:'12px 0'}}>
-                  <div style={{fontSize:'40px',fontWeight:'700',color:'#5B4FD4'}}>{bodyFatLogs[0].bodyFatPercent}%</div>
-                  <div style={{fontSize:'13px',color:'#9898AA',marginTop:'4px'}}>
+                  <div className="bf-reading-val">{bodyFatLogs[0].bodyFatPercent}%</div>
+                  <div className="bf-reading-cat">
                     {getBodyFatCategory(bodyFatLogs[0].bodyFatPercent, profile.sex)}
                   </div>
                 </div>
@@ -1799,10 +1799,7 @@ function App() {
                     <div key={b.id} className="weight-item">
                       <span className="weight-date">{new Date(b.date).toLocaleDateString('en-US',{month:'short',day:'numeric'})}</span>
                       <span className="weight-val">{b.bodyFatPercent}%</span>
-                      <button onClick={() => deleteBodyFat(b.id)}
-                        style={{background:'transparent',border:'none',color:'#E4E4EC',cursor:'pointer',fontSize:'14px'}}
-                        onMouseOver={e=>e.target.style.color='#E85A5A'}
-                        onMouseOut={e=>e.target.style.color='#E4E4EC'}>🗑️</button>
+                      <button onClick={() => deleteBodyFat(b.id)} className="delete-btn">🗑️</button>
                     </div>
                   ))}
                 </div>
@@ -2016,7 +2013,7 @@ function App() {
             }
           }
         }}
-        style={{background:'#5B4FD4',color:'#fff',border:'none',borderRadius:'10px',padding:'8px 16px',fontSize:'12px',fontWeight:'600',cursor:'pointer'}}>
+        className="notif-enable-btn">
         {typeof Notification !== 'undefined' && Notification.permission === 'granted' ? '✅ Enabled' : 'Enable'}
       </button>
     </div>
@@ -2061,18 +2058,18 @@ function App() {
             {sleepLogs.length > 0 && (
               <div className="progress-card">
                 <h3>😴 Sleep History</h3>
-                <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'10px',marginBottom:'16px'}}>
-                  <div style={{textAlign:'center',padding:'12px',background:'#F0EFFD',borderRadius:'12px'}}>
-                    <div style={{fontSize:'22px',fontWeight:'700',color:'#5B4FD4'}}>{(sleepLogs.slice(0,7).reduce((s,l)=>s+l.hoursSlept,0)/Math.min(sleepLogs.length,7)).toFixed(1)}</div>
-                    <div style={{fontSize:'11px',color:'#9898AA',marginTop:'2px'}}>Avg Hours</div>
+                <div className="stat-tile-row">
+                  <div className="stat-tile stat-tile-purple">
+                    <div className="stat-tile-val">{(sleepLogs.slice(0,7).reduce((s,l)=>s+l.hoursSlept,0)/Math.min(sleepLogs.length,7)).toFixed(1)}</div>
+                    <div className="stat-tile-label">Avg Hours</div>
                   </div>
-                  <div style={{textAlign:'center',padding:'12px',background:'#EDFAF5',borderRadius:'12px'}}>
-                    <div style={{fontSize:'22px',fontWeight:'700',color:'#1D9E75'}}>{sleepLogs.length}</div>
-                    <div style={{fontSize:'11px',color:'#9898AA',marginTop:'2px'}}>Days Logged</div>
+                  <div className="stat-tile stat-tile-green">
+                    <div className="stat-tile-val">{sleepLogs.length}</div>
+                    <div className="stat-tile-label">Days Logged</div>
                   </div>
-                  <div style={{textAlign:'center',padding:'12px',background:'#FEF4E8',borderRadius:'12px'}}>
-                    <div style={{fontSize:'22px',fontWeight:'700',color:'#E8820C'}}>{sleepLogs[0]?.hoursSlept}h</div>
-                    <div style={{fontSize:'11px',color:'#9898AA',marginTop:'2px'}}>Last Night</div>
+                  <div className="stat-tile stat-tile-orange">
+                    <div className="stat-tile-val">{sleepLogs[0]?.hoursSlept}h</div>
+                    <div className="stat-tile-label">Last Night</div>
                   </div>
                 </div>
                 <div className="weight-list">
@@ -2086,13 +2083,10 @@ function App() {
                         </div>
                       </div>
                       <div style={{display:'flex',alignItems:'center',gap:'10px'}}>
-                        <span style={{fontSize:'12px',color:s.hoursSlept>=7?'#1D9E75':'#E8820C',fontWeight:'600',background:s.hoursSlept>=7?'#EDFAF5':'#FEF4E8',padding:'2px 8px',borderRadius:'20px'}}>
+                        <span className={`sleep-badge ${s.hoursSlept>=7?'sleep-badge-good':'sleep-badge-short'}`}>
                           {s.hoursSlept>=7?'✅ Good':'⚠️ Short'}
                         </span>
-                        <button onClick={()=>deleteSleep(s.id)}
-                          style={{background:'transparent',border:'none',cursor:'pointer',fontSize:'14px',color:'#ccc'}}
-                          onMouseOver={e=>e.target.style.color='#E85A5A'}
-                          onMouseOut={e=>e.target.style.color='#ccc'}>🗑️</button>
+                        <button onClick={()=>deleteSleep(s.id)} className="delete-btn">🗑️</button>
                       </div>
                     </div>
                   ))}
@@ -2114,8 +2108,8 @@ function App() {
                   <span style={{fontSize:'28px'}}>{['','😭','😢','😟','😕','😐','🙂','😊','😄','🤩','🥳'][moodScore]}</span>
                   <input type="range" min="1" max="10" value={moodScore}
                     onChange={e=>setMoodScore(parseInt(e.target.value))}
-                    style={{flex:1,accentColor:'#5B4FD4',height:'6px',cursor:'pointer'}}/>
-                  <span style={{fontSize:'16px',fontWeight:'700',color:'#5B4FD4',minWidth:'20px'}}>{moodScore}</span>
+                    style={{flex:1,accentColor:'var(--color-primary)',height:'6px',cursor:'pointer'}}/>
+                  <span style={{fontSize:'16px',fontWeight:'700',color:'var(--color-primary)',minWidth:'20px'}}>{moodScore}</span>
                 </div>
               </div>
               <div className="profile-field-full"><label>Energy Level</label>
@@ -2143,18 +2137,18 @@ function App() {
             {moodLogs.length > 0 && (
               <div className="progress-card">
                 <h3>📈 Mood History</h3>
-                <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'10px',marginBottom:'16px'}}>
-                  <div style={{textAlign:'center',padding:'12px',background:'#F0EFFD',borderRadius:'12px'}}>
-                    <div style={{fontSize:'22px',fontWeight:'700',color:'#5B4FD4'}}>{(moodLogs.slice(0,7).reduce((s,m)=>s+m.moodScore,0)/Math.min(moodLogs.length,7)).toFixed(1)}</div>
-                    <div style={{fontSize:'11px',color:'#9898AA',marginTop:'2px'}}>Avg Mood</div>
+                <div className="stat-tile-row">
+                  <div className="stat-tile stat-tile-purple">
+                    <div className="stat-tile-val">{(moodLogs.slice(0,7).reduce((s,m)=>s+m.moodScore,0)/Math.min(moodLogs.length,7)).toFixed(1)}</div>
+                    <div className="stat-tile-label">Avg Mood</div>
                   </div>
-                  <div style={{textAlign:'center',padding:'12px',background:'#EDFAF5',borderRadius:'12px'}}>
-                    <div style={{fontSize:'28px'}}>{['','😭','😢','😟','😕','😐','🙂','😊','😄','🤩','🥳'][moodLogs[0]?.moodScore||5]}</div>
-                    <div style={{fontSize:'11px',color:'#9898AA',marginTop:'2px'}}>Latest</div>
+                  <div className="stat-tile stat-tile-green">
+                    <div className="stat-tile-val" style={{fontSize:'28px'}}>{['','😭','😢','😟','😕','😐','🙂','😊','😄','🤩','🥳'][moodLogs[0]?.moodScore||5]}</div>
+                    <div className="stat-tile-label">Latest</div>
                   </div>
-                  <div style={{textAlign:'center',padding:'12px',background:'#FEF4E8',borderRadius:'12px'}}>
-                    <div style={{fontSize:'22px',fontWeight:'700',color:'#E8820C'}}>{moodLogs.length}</div>
-                    <div style={{fontSize:'11px',color:'#9898AA',marginTop:'2px'}}>Days Logged</div>
+                  <div className="stat-tile stat-tile-orange">
+                    <div className="stat-tile-val">{moodLogs.length}</div>
+                    <div className="stat-tile-label">Days Logged</div>
                   </div>
                 </div>
                 <div className="weight-list">
@@ -2170,10 +2164,7 @@ function App() {
                         </div>
                         {m.notes && <div style={{fontSize:'11px',color:'#555',marginTop:'2px',fontStyle:'italic'}}>"{m.notes}"</div>}
                       </div>
-                      <button onClick={()=>deleteMood(m.id)}
-                        style={{background:'transparent',border:'none',cursor:'pointer',fontSize:'14px',color:'#ccc'}}
-                        onMouseOver={e=>e.target.style.color='#E85A5A'}
-                        onMouseOut={e=>e.target.style.color='#ccc'}>🗑️</button>
+                      <button onClick={()=>deleteMood(m.id)} className="delete-btn">🗑️</button>
                     </div>
                   ))}
                 </div>
