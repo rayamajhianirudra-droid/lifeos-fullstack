@@ -1889,7 +1889,7 @@ function App() {
                         totalProtein < proteinGoal ? `I'm ${proteinGoal - totalProtein}g short on protein — what should I eat?` : 'What high-protein snacks would you recommend?',
                         streak > 2 ? `I have a ${streak}-day streak — how do I keep it going?` : 'How do I build a consistent healthy habit?',
                         'Give me a quick workout for today',
-                        'What's a healthy meal I can make tonight?',
+                        "What's a healthy meal I can make tonight?",
                       ].map((p, i) => (
                         <button key={i} className="quick-prompt-btn" onClick={() => { setAiMessage(p); setTimeout(askAiCoach, 50); }}>{p}</button>
                       ))}
