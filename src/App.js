@@ -6,6 +6,124 @@ import './App.css';
 const API = process.env.REACT_APP_API_URL || 'http://localhost:8080/api';
 const USDA_KEY = process.env.REACT_APP_USDA_KEY || '';
 
+// ─────────────────────────────────────────────────────────────
+// LifeOS 3.0 dashboard visuals (module-level, no extra deps)
+// ─────────────────────────────────────────────────────────────
+
+// Optional local photography. Drop JPGs into public/images/dash/<theme>.jpg and set
+// REACT_APP_DASH_PHOTOS=true. Until then no image requests are made and every card
+// renders its designed gradient scene, so nothing can ever show a broken image.
+// (Unsplash Source, which the original spec used, was shut down in 2024; it also
+// would have sent users' food names to a third party.)
+const DASH_PHOTOS = process.env.REACT_APP_DASH_PHOTOS === 'true';
+const dashPhoto = (theme) => (DASH_PHOTOS ? `${process.env.PUBLIC_URL || ''}/images/dash/${theme}.jpg` : null);
+
+const EXERCISE_THEMES = {
+  cardio: 'run', strength: 'gym', hiit: 'hiit', yoga: 'yoga',
+  cycling: 'cycle', swimming: 'swim', walking: 'walk', sports: 'sport',
+};
+
+function PhotoBg({ theme, className = '', children, label }) {
+  const src = dashPhoto(theme);
+  const [failedSrc, setFailedSrc] = useState(null);
+  const showImg = src && src !== failedSrc;
+  return (
+    <div className={`photo-bg photo-theme-${theme} ${className}`} role={label ? 'img' : undefined} aria-label={label}>
+      {showImg && (
+        <img className="photo-bg-img" src={src} alt="" aria-hidden="true"
+          loading="lazy" decoding="async" onError={() => setFailedSrc(src)}/>
+      )}
+      <div className="photo-bg-scrim"/>
+      <div className="photo-bg-content">{children}</div>
+    </div>
+  );
+}
+
+// Vector mountain + lake scene for the hero. Slow Ken Burns drift is CSS-only
+// (transform/opacity) and disabled under prefers-reduced-motion.
+function HeroScene() {
+  return (
+    <svg className="hero-scene" viewBox="0 0 800 360" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+      <defs>
+        <linearGradient id="lifeosSky" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#2A1F6B"/>
+          <stop offset="55%" stopColor="#5B4FD4"/>
+          <stop offset="100%" stopColor="#F2A07B"/>
+        </linearGradient>
+        <linearGradient id="lifeosLake" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#3B2F8F" stopOpacity="0.9"/>
+          <stop offset="100%" stopColor="#120C33"/>
+        </linearGradient>
+      </defs>
+      <rect width="800" height="360" fill="url(#lifeosSky)"/>
+      <circle className="hero-sun" cx="560" cy="196" r="38" fill="#FFD6A5" opacity="0.85"/>
+      <path d="M0 250 L120 150 L200 210 L300 110 L400 200 L470 150 L560 230 L660 130 L800 240 L800 360 L0 360 Z" fill="#3A2E85"/>
+      <path d="M0 270 L90 200 L180 250 L260 190 L360 255 L450 205 L540 262 L640 195 L740 250 L800 225 L800 360 L0 360 Z" fill="#241A63"/>
+      <rect y="262" width="800" height="98" fill="url(#lifeosLake)"/>
+      <g className="hero-ripples" stroke="rgba(255,214,165,.45)" strokeWidth="2" strokeLinecap="round">
+        <line x1="520" y1="282" x2="600" y2="282"/>
+        <line x1="535" y1="298" x2="585" y2="298"/>
+        <line x1="548" y1="314" x2="572" y2="314"/>
+      </g>
+    </svg>
+  );
+}
+
+// Animated SVG glass. Water level animates with transform (GPU), not geometry attrs.
+function HydrationGlass({ filled, total = 8 }) {
+  const pct = Math.max(0, Math.min((filled / total) * 100, 100));
+  const innerH = 84;
+  const offset = innerH * (1 - pct / 100);
+  return (
+    <div className="hydration-glass-wrap" role="img" aria-label={`Hydration ${filled} of ${total} glasses`}>
+      <svg viewBox="0 0 60 100" width="56" height="94" aria-hidden="true">
+        <defs>
+          <clipPath id="lifeosGlassClip">
+            <path d="M9 10 L13 90 Q13 94 17 94 L43 94 Q47 94 47 90 L51 10 Z"/>
+          </clipPath>
+          <linearGradient id="lifeosWaterGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#93C5FD"/>
+            <stop offset="100%" stopColor="#2563EB"/>
+          </linearGradient>
+        </defs>
+        <g clipPath="url(#lifeosGlassClip)">
+          <g className="hydration-water" style={{ transform: `translateY(${offset}px)` }}>
+            <path className="hydration-wave" d="M-20 10 Q-5 6 10 10 T40 10 T70 10 T100 10 L100 100 L-20 100 Z" fill="url(#lifeosWaterGrad)"/>
+            {pct > 8 && [18, 30, 40, 24, 35].map((x, i) => (
+              <circle key={i} cx={x} cy={88 - (i % 3) * 6} r={1.4 + (i % 2) * 0.6}
+                fill="rgba(255,255,255,.65)" className="bubble-rise"
+                style={{ animationDelay: `${i * 0.55}s` }}/>
+            ))}
+          </g>
+        </g>
+        <path d="M9 10 L13 90 Q13 94 17 94 L43 94 Q47 94 47 90 L51 10" fill="none"
+          stroke="currentColor" strokeOpacity="0.35" strokeWidth="2" strokeLinejoin="round"/>
+        <line x1="15" y1="18" x2="17" y2="80" stroke="rgba(255,255,255,.5)" strokeWidth="2" strokeLinecap="round"/>
+      </svg>
+      <div className="hydration-glass-pct">{Math.round(pct)}%</div>
+    </div>
+  );
+}
+
+// Progress ring badge for achievements.
+function BadgeRing({ icon, title, progress, unlocked, color }) {
+  const r = 22;
+  const c = 2 * Math.PI * r;
+  const p = unlocked ? 1 : Math.max(0, Math.min(progress || 0, 1));
+  return (
+    <div className={`badge-ring ${unlocked ? 'badge-ring-unlocked' : ''}`} title={title}>
+      <svg width="56" height="56" viewBox="0 0 56 56" aria-hidden="true">
+        <circle cx="28" cy="28" r={r} fill="none" stroke="var(--color-border)" strokeWidth="4"/>
+        <circle cx="28" cy="28" r={r} fill="none" stroke={color} strokeWidth="4" strokeLinecap="round"
+          strokeDasharray={`${p * c} ${c}`} transform="rotate(-90 28 28)" className="badge-ring-arc"/>
+      </svg>
+      <span className="badge-ring-icon" aria-hidden="true">{icon}</span>
+      <span className="badge-ring-title">{title}</span>
+      <span className="sr-only">{unlocked ? 'Unlocked' : `${Math.round(p * 100)}% progress`}</span>
+    </div>
+  );
+}
+
 function App() {
   const [token, setToken] = useState(localStorage.getItem('token'));
   const [currentUser, setCurrentUser] = useState(localStorage.getItem('userName'));
@@ -399,10 +517,11 @@ function App() {
     } catch (err) { console.log(err); }
   };
 
-  const askAiCoach = async () => {
-    if (!aiMessage.trim()) return;
+  const askAiCoach = async (override) => {
+    // Accept text directly so callers don't race setState (onClick passes an event, ignore it).
+    const userMsg = (typeof override === 'string' ? override : aiMessage).trim();
+    if (!userMsg || aiLoading) return;
     setAiLoading(true);
-    const userMsg = aiMessage;
     setAiMessage('');
     const newHistory = [...chatHistory, { role: 'user', text: userMsg }];
     setChatHistory(newHistory);
@@ -417,7 +536,9 @@ function App() {
     try {
       const res = await axios.post(`${API}/ai/chat`, {
         message: userMsg,
-        context: context
+        context: context,
+        // Prior turns only (the backend appends `message` itself); capped to bound token cost.
+        history: chatHistory.slice(-10).map(t => ({ role: t.role, text: String(t.text || '').slice(0, 2000) }))
       }, { headers: { Authorization: `Bearer ${token}` } });
       const reply = res.data.response || generateSmartFallback(userMsg);
       setChatHistory([...newHistory, { role: 'ai', text: reply }]);
@@ -789,10 +910,11 @@ function App() {
   };
 
   // --- Sleep functions ---
-  const fetchSleep = async () => {
+  const fetchSleep = async (date) => {
     if (!token) return;
     try {
-      const res = await axios.get(`${API}/sleep`, { headers: { Authorization: `Bearer ${token}` } });
+      const url = date ? `${API}/sleep?date=${encodeURIComponent(date)}` : `${API}/sleep`;
+      const res = await axios.get(url, { headers: { Authorization: `Bearer ${token}` } });
       setSleepLogs(res.data);
     } catch(e) {}
   };
@@ -889,6 +1011,38 @@ function App() {
     }
   // eslint-disable-next-line
   }, [token]);
+
+  // --- LifeOS 3.0 dashboard derived values ---
+  const sameDay = (d) => d != null && String(d).slice(0, 10) === selectedDate;
+  const daySleep = sleepLogs.find(s => sameDay(s.date)) || null;
+  const dayMood = moodLogs.find(m => sameDay(m.date)) || null;
+  const featuredFood = foodLogs.reduce((max, f) => ((f.calories || 0) > (max?.calories || 0) ? f : max), null);
+  const foodTheme = featuredFood ? `meal-${featuredFood.mealType || 'snack'}` : 'meal-default';
+  const latestExercise = exerciseLogs[0] || null;
+  const exerciseTheme = EXERCISE_THEMES[(latestExercise?.category || '').toLowerCase()] || 'move';
+  const latestWeight = weightLogs.length > 0 ? weightLogs[0].weightLbs : null;
+  const latestBodyFat = bodyFatLogs.length > 0 ? bodyFatLogs[0].bodyFatPercent : null;
+  const sparkData = dailyHistory.slice(-7);
+  const mealsLogged = new Set(foodLogs.map(f => f.mealType)).size;
+  const dailyFocus = [
+    { key: 'meals', label: 'Log 3 meals', done: mealsLogged >= 3, tab: 'log' },
+    { key: 'water', label: 'Drink 8 glasses', done: water >= 8, tab: null },
+    { key: 'protein', label: `Hit ${proteinGoal}g protein`, done: totalProtein >= proteinGoal, tab: 'log' },
+    { key: 'move', label: 'Move your body', done: exerciseLogs.length > 0, tab: 'exercise' },
+  ];
+  const focusDone = dailyFocus.filter(f => f.done).length;
+  const coachTip = smartReminders.find(r => r.icon !== '✅') || smartReminders[0];
+  const achievementProgress = {
+    streak_3: streak / 3, streak_7: streak / 7, streak_30: streak / 30,
+    calorie_goal: dailyGoal > 0 ? totalCalories / dailyGoal : 0,
+    protein_goal: proteinGoal > 0 ? totalProtein / proteinGoal : 0,
+  };
+  const dashBadges = achievements
+    .map(a => ({ ...a, progress: a.unlocked ? 1 : (achievementProgress[a.id] || 0) }))
+    .sort((a, b) => b.progress - a.progress)
+    .slice(0, 6);
+  const coachPrompts = ['What should I eat next?', 'How is my protein today?', 'Plan a quick workout'];
+  const openCoachWith = (prompt) => { setActiveTab('coach'); askAiCoach(prompt); };
 
   if (!token) {
     return (
@@ -1013,7 +1167,7 @@ function App() {
 
       <header className="topnav">
         <div className="topnav-greeting">
-          <h2>{greeting}, {currentUser} {greetingEmoji}</h2>
+          <h2>{greeting}, {currentUser?.split(' ')[0] || currentUser} {greetingEmoji}</h2>
           <p>"Every healthy choice compounds."</p>
         </div>
         <div className="topnav-right">
@@ -1086,45 +1240,53 @@ function App() {
 
       <main className="main-content">
 
-        {/* DASHBOARD */}
+        {/* DASHBOARD — LifeOS 3.0 */}
         {activeTab === 'dashboard' && (
-          <div className="tab-content">
+          <div className="tab-content dash3">
 
-            {/* HERO SECTION */}
-            <div className="dash-hero">
-              <div className="hero-top">
-                <div>
-                  <div className="hero-greeting">Good {new Date().getHours() < 12 ? 'Morning' : new Date().getHours() < 17 ? 'Afternoon' : 'Evening'}</div>
-                  <div className="hero-name">{profile?.firstName || 'there'} 👋</div>
+            {/* CINEMATIC HERO */}
+            <section className="hero-cinematic" aria-label="Today overview">
+              <div className="hero-cinematic-bg">
+                <PhotoBg theme="hero" className="hero-photo"><HeroScene/></PhotoBg>
+              </div>
+              <div className="hero-cinematic-inner">
+                <div className="hero-cinematic-left">
+                  <div className="hero-greeting">GOOD {new Date().getHours() < 12 ? 'MORNING' : new Date().getHours() < 17 ? 'AFTERNOON' : 'EVENING'}</div>
+                  <h1 className="hero-name">{currentUser?.split(' ')[0] || currentUser || 'there'}</h1>
                   <div className="hero-date">{formatDateLabel(selectedDate)}</div>
+                  <div className="hero-focus">
+                    <div className="hero-focus-head">
+                      <span>Daily focus</span>
+                      <span className="hero-focus-count">{focusDone}/{dailyFocus.length}</span>
+                    </div>
+                    <ul className="hero-focus-list">
+                      {dailyFocus.map(f => (
+                        <li key={f.key}>
+                          <button type="button" className={`hero-focus-item ${f.done ? 'is-done' : ''}`}
+                            aria-pressed={f.done}
+                            onClick={() => f.key === 'water' ? setWater(w => Math.min(w + 1, 20)) : setActiveTab(f.tab)}>
+                            <span className="hero-focus-check" aria-hidden="true">{f.done ? '✓' : ''}</span>
+                            {f.label}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 </div>
-                <div className="hero-score-ring">
-                  <svg width="58" height="58" viewBox="0 0 58 58">
-                    <circle cx="29" cy="29" r="24" fill="none" stroke="rgba(255,255,255,.2)" strokeWidth="6"/>
-                    <circle cx="29" cy="29" r="24" fill="none" stroke="#fff" strokeWidth="6"
-                      strokeDasharray={`${Math.min(healthScore, 100) * 1.508} 150.8`}
-                      strokeLinecap="round" transform="rotate(-90 29 29)"
-                      style={{transition:'stroke-dasharray .8s ease'}}/>
-                    <text x="29" y="33" textAnchor="middle" fill="#fff" fontSize="13" fontWeight="700">{healthScore}</text>
+                <div className="hero-score" title={`Health Score ${healthScore}/100 — nutrition 40%, activity 30%, streak 20%, hydration 10%`}>
+                  <svg width="120" height="120" viewBox="0 0 120 120" aria-hidden="true">
+                    <circle cx="60" cy="60" r="50" fill="none" stroke="rgba(255,255,255,.18)" strokeWidth="9"/>
+                    <circle cx="60" cy="60" r="50" fill="none" stroke="#fff" strokeWidth="9"
+                      strokeDasharray={`${Math.min(healthScore, 100) * 3.1416} 314.16`}
+                      strokeLinecap="round" transform="rotate(-90 60 60)" className="hero-score-arc"/>
                   </svg>
-                  <div className="hero-score-label">Score</div>
+                  <div className="hero-score-text">
+                    <span className="hero-score-num">{healthScore}</span>
+                    <span className="hero-score-label">{healthLabel}</span>
+                  </div>
                 </div>
               </div>
-              <div className="hero-stats-row">
-                <div className="hero-stat">
-                  <div className="hero-stat-val">{totalCalories}</div>
-                  <div className="hero-stat-label">Calories Eaten</div>
-                </div>
-                <div className="hero-stat">
-                  <div className="hero-stat-val">{Math.round(caloriePercent)}%</div>
-                  <div className="hero-stat-label">Goal Reached</div>
-                </div>
-                <div className="hero-stat">
-                  <div className="hero-stat-val">{streak > 0 ? `🔥 ${streak}` : '—'}</div>
-                  <div className="hero-stat-label">Day Streak</div>
-                </div>
-              </div>
-            </div>
+            </section>
 
             {streak >= 3 && (
               <div className="streak-banner">
@@ -1137,30 +1299,73 @@ function App() {
               </div>
             )}
 
-            {/* QUICK ACTIONS */}
-            <div className="quick-actions">
-              <button className="quick-action-btn" onClick={() => setActiveTab('log')}>
-                <span className="quick-action-icon">🍽️</span>
-                <span className="quick-action-label">Log Food</span>
-              </button>
-              <button className="quick-action-btn" onClick={() => setActiveTab('exercise')}>
-                <span className="quick-action-icon">💪</span>
-                <span className="quick-action-label">Log Exercise</span>
-              </button>
-              <button className="quick-action-btn" onClick={() => setActiveTab('coach')}>
-                <span className="quick-action-icon">🤖</span>
-                <span className="quick-action-label">AI Coach</span>
-              </button>
-            </div>
-
             <div className="date-nav">
-              <button className="date-nav-btn" onClick={() => changeDate(-1)}>‹</button>
+              <button className="date-nav-btn" onClick={() => changeDate(-1)} aria-label="Previous day">‹</button>
               <div className="date-nav-center">
                 <span className="date-nav-label">{formatDateLabel(selectedDate)}</span>
                 {!isToday && <button className="date-today-btn" onClick={goToToday}>Back to Today</button>}
               </div>
-              <button className="date-nav-btn" onClick={() => changeDate(1)} disabled={isToday}>›</button>
+              <button className="date-nav-btn" onClick={() => changeDate(1)} disabled={isToday} aria-label="Next day">›</button>
             </div>
+
+            {/* 4-UP STAT CARDS */}
+            <div className="stat-cards-grid">
+              <button type="button" className="stat-card" onClick={() => setActiveTab('log')}>
+                <PhotoBg theme={foodTheme} className="stat-card-photo">
+                  <span className="stat-card-kicker">Calories</span>
+                  <span className="stat-card-val">{totalCalories}<small>/{dailyGoal}</small></span>
+                  <span className="stat-card-sub">{featuredFood ? `Top: ${featuredFood.foodName}` : 'Nothing logged yet'}</span>
+                  <span className="stat-card-bar"><span style={{width:`${Math.min(caloriePercent,100)}%`}}/></span>
+                </PhotoBg>
+              </button>
+              <div className="stat-card stat-card-hydration">
+                <div className="stat-card-hydration-inner">
+                  <div>
+                    <span className="stat-card-kicker">Hydration</span>
+                    <span className="stat-card-val">{water}<small>/8</small></span>
+                    <span className="stat-card-sub">glasses</span>
+                    <div className="stat-card-actions">
+                      <button type="button" className="mini-btn" onClick={() => setWater(w => Math.max(w - 1, 0))} aria-label="Remove a glass" disabled={water === 0}>−</button>
+                      <button type="button" className="mini-btn mini-btn-primary" onClick={() => setWater(w => Math.min(w + 1, 20))} aria-label="Add a glass">+</button>
+                    </div>
+                  </div>
+                  <HydrationGlass filled={water}/>
+                </div>
+              </div>
+              <button type="button" className="stat-card" onClick={() => setActiveTab('exercise')}>
+                <PhotoBg theme={exerciseTheme} className="stat-card-photo">
+                  <span className="stat-card-kicker">Activity</span>
+                  <span className="stat-card-val">{totalBurned}<small> kcal</small></span>
+                  <span className="stat-card-sub">{latestExercise ? `${latestExercise.exerciseName} · ${latestExercise.durationMinutes} min` : 'No workout logged'}</span>
+                  <span className="stat-card-bar"><span style={{width:`${Math.min((totalBurned/500)*100,100)}%`}}/></span>
+                </PhotoBg>
+              </button>
+              <button type="button" className="stat-card" onClick={() => setActiveTab('sleep')}>
+                <PhotoBg theme="sleep" className="stat-card-photo">
+                  <span className="stat-card-kicker">Sleep</span>
+                  <span className="stat-card-val">{daySleep ? daySleep.hoursSlept : '—'}<small>{daySleep ? ' hrs' : ''}</small></span>
+                  <span className="stat-card-sub">{daySleep ? `Quality: ${daySleep.quality}` : 'Not logged'}</span>
+                  <span className="stat-card-bar"><span style={{width:`${Math.min(((daySleep?.hoursSlept || 0)/8)*100,100)}%`}}/></span>
+                </PhotoBg>
+              </button>
+            </div>
+
+            {/* AI COACH INSIGHT */}
+            {coachTip && (
+              <div className="ai-insight-strip" style={{'--tip-color': coachTip.color}}>
+                <div className="ai-insight-icon" aria-hidden="true">{coachTip.icon}</div>
+                <div className="ai-insight-body">
+                  <div className="ai-insight-title">{coachTip.title}</div>
+                  <div className="ai-insight-desc">{coachTip.desc}</div>
+                  <div className="ai-insight-prompts">
+                    {coachPrompts.map(p => (
+                      <button key={p} type="button" className="ai-insight-chip" onClick={() => openCoachWith(p)} disabled={aiLoading}>{p}</button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="calorie-card">
               <div className="calorie-ring-wrapper">
                 <svg width="130" height="130" viewBox="0 0 130 130">
@@ -1217,36 +1422,51 @@ function App() {
                 </div>
               )}
             </div>
+
+            {/* MACROS + 7-DAY SPARKLINES */}
             <div className="macro-row">
               {[
-                {label:'Protein',val:totalProtein,goal:proteinGoal,color:'#5B4FD4',pctBg:'#F0EFFD',pctColor:'#5B4FD4'},
-                {label:'Carbs',val:totalCarbs,goal:carbsGoal,color:'#1D9E75',pctBg:'#EDFAF5',pctColor:'#1D9E75'},
-                {label:'Fat',val:totalFat,goal:fatGoal,color:'#E8820C',pctBg:'#FEF4E8',pctColor:'#E8820C'},
+                {key:'protein',label:'Protein',val:totalProtein,goal:proteinGoal,color:'#5B4FD4',pctBg:'#F0EFFD',pctColor:'#5B4FD4'},
+                {key:'carbs',label:'Carbs',val:totalCarbs,goal:carbsGoal,color:'#1D9E75',pctBg:'#EDFAF5',pctColor:'#1D9E75'},
+                {key:'fat',label:'Fat',val:totalFat,goal:fatGoal,color:'#E8820C',pctBg:'#FEF4E8',pctColor:'#E8820C'},
               ].map(m => (
                 <div key={m.label} className="macro-card">
                   <div className="macro-card-label">{m.label}</div>
-                  <div className="macro-card-pct" style={{background:m.pctBg,color:m.pctColor}}>{Math.round((m.val/m.goal)*100)}%</div>
+                  <div className="macro-card-pct" style={{background:m.pctBg,color:m.pctColor}}>{m.goal > 0 ? Math.round((m.val/m.goal)*100) : 0}%</div>
                   <div className="macro-card-val" style={{color:m.color}}>{m.val}g</div>
                   <div className="macro-card-goal">of {m.goal}g goal</div>
-                  <div className="macro-card-bar"><div className="macro-card-fill" style={{'--w':`${Math.min((m.val/m.goal)*100,100)}%`,background:m.color}}/></div>
+                  <div className="macro-card-bar"><div className="macro-card-fill" style={{'--w':`${m.goal > 0 ? Math.min((m.val/m.goal)*100,100) : 0}%`,background:m.color}}/></div>
+                  {sparkData.length > 1 && (
+                    <div className="macro-sparkline" aria-label={`${m.label} last 7 days`}>
+                      <ResponsiveContainer width="100%" height={36}>
+                        <LineChart data={sparkData} margin={{top:4,right:2,bottom:2,left:2}}>
+                          <Line type="monotone" dataKey={m.key} stroke={m.color} strokeWidth={2} dot={false} isAnimationActive={false}/>
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
-            <div className="water-card">
-              <div className="water-header">
-                <span className="water-title">💧 Hydration</span>
-                <span className="water-count">{water} / 8 glasses</span>
-              </div>
-              <div className="water-progress">
-                <div className="water-progress-fill" style={{width:`${Math.min(water/8*100,100)}%`}}/>
-              </div>
-              <div className="water-glasses">
-                {[...Array(8)].map((_,i) => (
-                  <button key={i} className={`glass ${i < water ? 'glass-full' : ''}`}
-                    onClick={() => setWater(i < water ? i : i+1)}>💧</button>
-                ))}
-              </div>
+
+            {/* BODY METRICS */}
+            <div className="body-metrics-card">
+              <button type="button" className="body-metric" onClick={() => setActiveTab('progress')}>
+                <span className="body-metric-label">Weight</span>
+                <span className="body-metric-val">{latestWeight != null ? latestWeight : '—'}<small>{latestWeight != null ? ' lbs' : ''}</small></span>
+              </button>
+              <button type="button" className="body-metric" onClick={() => setActiveTab('profile')}>
+                <span className="body-metric-label">BMI</span>
+                <span className="body-metric-val">{bmi || '—'}</span>
+                {bmi && <span className="body-metric-tag">{bmiLabel}</span>}
+              </button>
+              <button type="button" className="body-metric" onClick={() => setActiveTab('bodyfat')}>
+                <span className="body-metric-label">Body Fat</span>
+                <span className="body-metric-val">{latestBodyFat != null ? latestBodyFat : '—'}<small>{latestBodyFat != null ? '%' : ''}</small></span>
+                {latestBodyFat != null && <span className="body-metric-tag">{getBodyFatCategory(latestBodyFat, profile.sex)}</span>}
+              </button>
             </div>
+
             {exerciseLogs.length > 0 && (
               <div className="foodlog-card">
                 <div className="foodlog-header">
@@ -1270,21 +1490,34 @@ function App() {
             <div className="wellness-strip">
               <div className="wellness-tile" onClick={() => setActiveTab('sleep')}>
                 <span className="wellness-tile-icon">😴</span>
-                <div className="wellness-tile-val">{sleepLogs && sleepLogs.length > 0 ? sleepLogs[0]?.hoursSlept || '—' : '—'}</div>
+                <div className="wellness-tile-val">{daySleep ? daySleep.hoursSlept : '—'}</div>
                 <div className="wellness-tile-label">Hrs Sleep</div>
-                <div className="wellness-tile-bar"><div className="wellness-tile-fill" style={{width:`${Math.min(((sleepLogs && sleepLogs.length > 0 ? sleepLogs[0]?.hoursSlept : 0)/8)*100,100)}%`,background:'#7C5CFC'}}/></div>
+                <div className="wellness-tile-bar"><div className="wellness-tile-fill" style={{width:`${Math.min(((daySleep?.hoursSlept || 0)/8)*100,100)}%`,background:'#7C5CFC'}}/></div>
               </div>
               <div className="wellness-tile" onClick={() => setActiveTab('mood')}>
                 <span className="wellness-tile-icon">😊</span>
-                <div className="wellness-tile-val">{moodLogs && moodLogs.length > 0 ? moodLogs[0]?.mood || '—' : '—'}</div>
-                <div className="wellness-tile-label">Today's Mood</div>
-                <div className="wellness-tile-bar"><div className="wellness-tile-fill" style={{width:'80%',background:'#1D9E75'}}/></div>
+                <div className="wellness-tile-val">{dayMood ? (dayMood.moodLabel || dayMood.moodScore) : '—'}</div>
+                <div className="wellness-tile-label">Mood</div>
+                <div className="wellness-tile-bar"><div className="wellness-tile-fill" style={{width:`${Math.min(((dayMood?.moodScore || 0)/10)*100,100)}%`,background:'#1D9E75'}}/></div>
               </div>
-              <div className="wellness-tile" onClick={() => setActiveTab('activity')}>
+              <div className="wellness-tile" onClick={() => setActiveTab('exercise')}>
                 <span className="wellness-tile-icon">🔥</span>
                 <div className="wellness-tile-val">{totalBurned}</div>
                 <div className="wellness-tile-label">Cal Burned</div>
                 <div className="wellness-tile-bar"><div className="wellness-tile-fill" style={{width:`${Math.min((totalBurned/500)*100,100)}%`,background:'#E8820C'}}/></div>
+              </div>
+            </div>
+
+            {/* ACHIEVEMENT RINGS */}
+            <div className="badge-strip">
+              <div className="badge-strip-head">
+                <span>Achievements</span>
+                <button type="button" className="badge-strip-link" onClick={() => setActiveTab('achievements')}>{unlockedCount}/{achievements.length} unlocked →</button>
+              </div>
+              <div className="badge-strip-row">
+                {dashBadges.map(b => (
+                  <BadgeRing key={b.id} icon={b.icon} title={b.title} progress={b.progress} unlocked={b.unlocked} color={b.color}/>
+                ))}
               </div>
             </div>
 
@@ -1871,22 +2104,45 @@ function App() {
 
             {/* ── CHAT PANEL ── */}
             <div className="coach-chat-panel">
+              {/* Chat header bar */}
+              <div className="chat-header-bar">
+                <div className="chat-header-left">
+                  <div className="chat-header-avatar">🤖</div>
+                  <div>
+                    <div className="chat-header-name">AI Coach</div>
+                    <div className="chat-header-status"><span className="chat-status-dot"/>Powered by Gemini</div>
+                  </div>
+                </div>
+                {chatHistory.length > 0 && (
+                  <button className="chat-clear-btn" onClick={() => setChatHistory([])} title="Clear conversation">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>
+                    </svg>
+                    Clear
+                  </button>
+                )}
+              </div>
+
               <div className="chat-messages" id="chatMessages">
                 {chatHistory.length === 0 && (
                   <div className="chat-welcome">
-                    <div className="chat-welcome-avatar">🤖</div>
-                    <div className="chat-welcome-title">Hi {profile?.firstName || currentUser}! I'm your AI Coach</div>
-                    <div className="chat-welcome-sub">Ask me anything about your nutrition, fitness, or health journey. I have full context of your today's stats.</div>
+                    <div className="chat-welcome-stats">
+                      <div className="chat-stat-chip">🔥 {totalCalories} cal</div>
+                      <div className="chat-stat-chip">💪 {totalProtein}g protein</div>
+                      <div className="chat-stat-chip">⚡ {streak} day streak</div>
+                    </div>
+                    <div className="chat-welcome-title">Hi {currentUser?.split(' ')[0] || currentUser}! What can I help with?</div>
+                    <div className="chat-welcome-sub">I have full context of your stats, goals, and history. Ask me anything.</div>
                     <div className="quick-prompts">
                       {[
                         `Am I on track for my ${profile.goal === 'lose' ? 'weight loss' : profile.goal === 'gain' ? 'muscle gain' : 'maintenance'} goal today?`,
                         totalCalories < dailyGoal * 0.5 ? 'What should I eat to hit my calorie goal?' : 'How can I balance my remaining macros?',
-                        totalProtein < proteinGoal ? `I'm ${proteinGoal - totalProtein}g short on protein — what should I eat?` : 'What high-protein snacks would you recommend?',
-                        streak > 2 ? `I have a ${streak}-day streak — how do I keep it going?` : 'How do I build a consistent healthy habit?',
+                        totalProtein < proteinGoal ? `I need ${proteinGoal - totalProtein}g more protein — what should I eat?` : 'What high-protein snacks do you recommend?',
+                        streak > 2 ? `I have a ${streak}-day streak — how do I keep it going?` : 'How do I build a consistent healthy routine?',
                         'Give me a quick workout for today',
                         "What's a healthy meal I can make tonight?",
                       ].map((p, i) => (
-                        <button key={i} className="quick-prompt-btn" onClick={() => { setAiMessage(p); setTimeout(askAiCoach, 50); }}>{p}</button>
+                        <button key={i} className="quick-prompt-btn" onClick={() => askAiCoach(p)}>{p}</button>
                       ))}
                     </div>
                   </div>
@@ -1920,8 +2176,13 @@ function App() {
 
               {chatHistory.length > 0 && (
                 <div className="coach-suggestion-chips">
-                  {['Tell me more', 'What should I eat next?', 'Give me a workout'].map((s,i) => (
-                    <button key={i} className="suggestion-chip" onClick={() => { setAiMessage(s); setTimeout(askAiCoach, 50); }}>{s}</button>
+                  {[
+                    'Tell me more',
+                    totalCalories < dailyGoal ? 'What should I eat next?' : 'How did I do today?',
+                    'Give me a workout',
+                    'Analyze my macros'
+                  ].map((s,i) => (
+                    <button key={i} className="suggestion-chip" onClick={() => askAiCoach(s)}>{s}</button>
                   ))}
                 </div>
               )}
