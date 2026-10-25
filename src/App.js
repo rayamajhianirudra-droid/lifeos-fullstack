@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import './App.css';
 
-const API = 'http://localhost:8080/api';
-const USDA_KEY = 'zFZ3LLHNi6jM9uLKavvLVtqFEQvledgKCy0t3xwy';
+const API = process.env.REACT_APP_API_URL || 'http://localhost:8080/api';
+const USDA_KEY = process.env.REACT_APP_USDA_KEY || '';
 
 function App() {
   const [token, setToken] = useState(localStorage.getItem('token'));
@@ -20,7 +20,13 @@ function App() {
   const [searching, setSearching] = useState(false);
   const [message, setMessage] = useState('');
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [water, setWater] = useState(0);
+  const [water, setWater] = useState(() => {
+    const today = new Date().toISOString().split('T')[0];
+    try {
+      const saved = JSON.parse(localStorage.getItem('waterLog') || '{}');
+      return saved.date === today ? (saved.count || 0) : 0;
+    } catch { return 0; }
+  });
   const [mealType, setMealType] = useState('breakfast');
   const [resetToken, setResetToken] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -93,6 +99,7 @@ function App() {
 
   // --- Notifications ---
   const [showNotifDropdown, setShowNotifDropdown] = useState(false);
+  const [chartRange, setChartRange] = useState('7d');
 
   const calculateDailyGoal = (p) => {
     const weightKg = p.weightLbs * 0.453592;
@@ -132,6 +139,15 @@ function App() {
     }
     localStorage.setItem('darkMode', darkMode);
   }, [darkMode]);
+
+  // Persist water intake daily — resets automatically at midnight via date key
+  useEffect(() => {
+    const today = new Date().toISOString().split('T')[0];
+    try {
+      localStorage.setItem('waterLog', JSON.stringify({ date: today, count: water }));
+    } catch { /* storage full or blocked */ }
+  }, [water]);
+
   // Helper: extract user ID from the JWT token payload
   const getUserIdFromToken = (jwt) => {
     try {
@@ -165,7 +181,7 @@ function App() {
         const subscription = existing || await registration.pushManager.subscribe({
           userVisibleOnly: true,
           applicationServerKey: urlBase64ToUint8Array(
-            'BO7mkNN_C_6Ex34wPYEFZL9xMaCnuGb3UuJt49qUwyhS726jv9_NwbUGn5X0Io_enG61kcFOxWr9xadUFVqLQVg'
+            process.env.REACT_APP_VAPID_KEY || ''
           ),
         });
 
@@ -745,13 +761,7 @@ function App() {
   ];
   const pieColors = ['#5B4FD4', '#1D9E75', '#E8820C'];
 
-  const quickPrompts = [
-    'What should I eat for dinner?',
-    'Am I on track today?',
-    'How can I improve my health score?',
-    'Is my BMI healthy?',
-    'What workout should I do today?',
-  ];
+
 
 
   // --- Supplement functions ---
@@ -993,7 +1003,7 @@ function App() {
               </div>
               <div className="streak-dots">
                 {[...Array(7)].map((_, i) => (
-                  <div key={i} className={`streak-dot ${i % 3 === 0 && i > 0 ? 'off' : ''}`}/>
+                  <div key={i} className={`streak-dot ${i >= streak ? 'off' : ''}`} title={i < streak ? `Day ${i + 1} ✓` : `Day ${i + 1}`}/>
                 ))}
               </div>
             </div>
@@ -1079,7 +1089,44 @@ function App() {
         {/* DASHBOARD */}
         {activeTab === 'dashboard' && (
           <div className="tab-content">
-            {streak > 0 && (
+
+            {/* HERO SECTION */}
+            <div className="dash-hero">
+              <div className="hero-top">
+                <div>
+                  <div className="hero-greeting">Good {new Date().getHours() < 12 ? 'Morning' : new Date().getHours() < 17 ? 'Afternoon' : 'Evening'}</div>
+                  <div className="hero-name">{profile?.firstName || 'there'} 👋</div>
+                  <div className="hero-date">{formatDateLabel(selectedDate)}</div>
+                </div>
+                <div className="hero-score-ring">
+                  <svg width="58" height="58" viewBox="0 0 58 58">
+                    <circle cx="29" cy="29" r="24" fill="none" stroke="rgba(255,255,255,.2)" strokeWidth="6"/>
+                    <circle cx="29" cy="29" r="24" fill="none" stroke="#fff" strokeWidth="6"
+                      strokeDasharray={`${Math.min(healthScore, 100) * 1.508} 150.8`}
+                      strokeLinecap="round" transform="rotate(-90 29 29)"
+                      style={{transition:'stroke-dasharray .8s ease'}}/>
+                    <text x="29" y="33" textAnchor="middle" fill="#fff" fontSize="13" fontWeight="700">{healthScore}</text>
+                  </svg>
+                  <div className="hero-score-label">Score</div>
+                </div>
+              </div>
+              <div className="hero-stats-row">
+                <div className="hero-stat">
+                  <div className="hero-stat-val">{totalCalories}</div>
+                  <div className="hero-stat-label">Calories Eaten</div>
+                </div>
+                <div className="hero-stat">
+                  <div className="hero-stat-val">{Math.round(caloriePercent)}%</div>
+                  <div className="hero-stat-label">Goal Reached</div>
+                </div>
+                <div className="hero-stat">
+                  <div className="hero-stat-val">{streak > 0 ? `🔥 ${streak}` : '—'}</div>
+                  <div className="hero-stat-label">Day Streak</div>
+                </div>
+              </div>
+            </div>
+
+            {streak >= 3 && (
               <div className="streak-banner">
                 <span className="streak-fire">🔥</span>
                 <span className="streak-num">{streak}</span>
@@ -1089,6 +1136,23 @@ function App() {
                 {streak >= 3 && streak < 7 && <span className="streak-badge">🌱 On a Roll</span>}
               </div>
             )}
+
+            {/* QUICK ACTIONS */}
+            <div className="quick-actions">
+              <button className="quick-action-btn" onClick={() => setActiveTab('log')}>
+                <span className="quick-action-icon">🍽️</span>
+                <span className="quick-action-label">Log Food</span>
+              </button>
+              <button className="quick-action-btn" onClick={() => setActiveTab('exercise')}>
+                <span className="quick-action-icon">💪</span>
+                <span className="quick-action-label">Log Exercise</span>
+              </button>
+              <button className="quick-action-btn" onClick={() => setActiveTab('coach')}>
+                <span className="quick-action-icon">🤖</span>
+                <span className="quick-action-label">AI Coach</span>
+              </button>
+            </div>
+
             <div className="date-nav">
               <button className="date-nav-btn" onClick={() => changeDate(-1)}>‹</button>
               <div className="date-nav-center">
@@ -1140,9 +1204,9 @@ function App() {
                 <div className="cal-sep"/>
                 <div className="cal-stat-row">
                   <div className="cal-stat-dot" style={{background:'#A0A0B0'}}/>
-                  <span className="cal-stat-label">Net Left</span>
-                  <span className="cal-stat-val" style={{color:'#5B4FD4'}}>{remaining}</span>
-                  <span className="cal-stat-badge badge-purple">kcal</span>
+                  <span className="cal-stat-label">Net Eaten</span>
+                  <span className="cal-stat-val" style={{color: (totalCalories - totalBurned) > dailyGoal ? '#D85A30' : '#5B4FD4'}}>{Math.max(totalCalories - totalBurned, 0)}</span>
+                  <span className="cal-stat-badge badge-purple">net kcal</span>
                 </div>
               </div>
               {bmi && (
@@ -1173,6 +1237,9 @@ function App() {
                 <span className="water-title">💧 Hydration</span>
                 <span className="water-count">{water} / 8 glasses</span>
               </div>
+              <div className="water-progress">
+                <div className="water-progress-fill" style={{width:`${Math.min(water/8*100,100)}%`}}/>
+              </div>
               <div className="water-glasses">
                 {[...Array(8)].map((_,i) => (
                   <button key={i} className={`glass ${i < water ? 'glass-full' : ''}`}
@@ -1199,6 +1266,28 @@ function App() {
                 ))}
               </div>
             )}
+            {/* WELLNESS STRIP */}
+            <div className="wellness-strip">
+              <div className="wellness-tile" onClick={() => setActiveTab('sleep')}>
+                <span className="wellness-tile-icon">😴</span>
+                <div className="wellness-tile-val">{sleepLogs && sleepLogs.length > 0 ? sleepLogs[0]?.hoursSlept || '—' : '—'}</div>
+                <div className="wellness-tile-label">Hrs Sleep</div>
+                <div className="wellness-tile-bar"><div className="wellness-tile-fill" style={{width:`${Math.min(((sleepLogs && sleepLogs.length > 0 ? sleepLogs[0]?.hoursSlept : 0)/8)*100,100)}%`,background:'#7C5CFC'}}/></div>
+              </div>
+              <div className="wellness-tile" onClick={() => setActiveTab('mood')}>
+                <span className="wellness-tile-icon">😊</span>
+                <div className="wellness-tile-val">{moodLogs && moodLogs.length > 0 ? moodLogs[0]?.mood || '—' : '—'}</div>
+                <div className="wellness-tile-label">Today's Mood</div>
+                <div className="wellness-tile-bar"><div className="wellness-tile-fill" style={{width:'80%',background:'#1D9E75'}}/></div>
+              </div>
+              <div className="wellness-tile" onClick={() => setActiveTab('activity')}>
+                <span className="wellness-tile-icon">🔥</span>
+                <div className="wellness-tile-val">{totalBurned}</div>
+                <div className="wellness-tile-label">Cal Burned</div>
+                <div className="wellness-tile-bar"><div className="wellness-tile-fill" style={{width:`${Math.min((totalBurned/500)*100,100)}%`,background:'#E8820C'}}/></div>
+              </div>
+            </div>
+
             <div className="foodlog-card">
               <div className="foodlog-header">
                 <h3 className="foodlog-title">{formatDateLabel(selectedDate)}'s Food Log</h3>
@@ -1323,9 +1412,7 @@ function App() {
                       <div style={{display:'flex',gap:'6px'}}>
                         <button className="log-btn" onClick={()=>logCustomFood(cf)}>+ Log</button>
                         <button onClick={()=>deleteCustomFood(cf.id)}
-                          style={{background:'transparent',border:'none',cursor:'pointer',fontSize:'14px',color:'#ccc'}}
-                          onMouseOver={e=>e.target.style.color='#E85A5A'}
-                          onMouseOut={e=>e.target.style.color='#ccc'}>🗑️</button>
+                          className="delete-btn">🗑️</button>
                       </div>
                     </div>
                   ))}
@@ -1394,160 +1481,217 @@ function App() {
         {/* PROGRESS */}
         {activeTab === 'progress' && (
           <div className="tab-content">
-            <div className="progress-card">
-              <h3>Today's Summary</h3>
-              <div className="progress-stats">
-                <div className="progress-stat"><span className="progress-stat-num">{foodLogs.length}</span><span className="progress-stat-label">Foods Logged</span></div>
-                <div className="progress-stat"><span className="progress-stat-num">{totalCalories}</span><span className="progress-stat-label">Calories Eaten</span></div>
-                <div className="progress-stat"><span className="progress-stat-num">{totalProtein}g</span><span className="progress-stat-label">Total Protein</span></div>
-                <div className="progress-stat"><span className="progress-stat-num">🔥{streak}</span><span className="progress-stat-label">Day Streak</span></div>
+
+            {/* ── ANALYTICS HEADER ── */}
+            <div className="analytics-header">
+              <div className="analytics-title-row">
+                <div>
+                  <div className="analytics-title">Analytics</div>
+                  <div className="analytics-subtitle">Track your health journey</div>
+                </div>
+                <div className="range-tabs">
+                  {['7D','30D','90D'].map(r => (
+                    <button key={r}
+                      className={`range-tab${chartRange === r ? ' range-tab-active' : ''}`}
+                      onClick={() => setChartRange(r)}>{r}</button>
+                  ))}
+                </div>
               </div>
             </div>
 
-            {/* DAILY CALORIE HISTORY - LAST 30 DAYS */}
-            <div className="progress-card">
-              <h3>📊 Daily Calorie History</h3>
-              <p style={{fontSize:'12px',color:'#9898AA',marginBottom:'16px'}}>Last 30 days of calorie intake</p>
-              {dailyHistory.length === 0 ? (
-                <div className="empty-state">
-                  <span>📊</span>
-                  <p>Log some food to see your calorie history</p>
+            {/* ── SUMMARY STAT ROW ── */}
+            <div className="analytics-summary-row">
+              <div className="analytics-stat">
+                <div className="analytics-stat-val">{foodLogs.length}</div>
+                <div className="analytics-stat-label">Foods Logged</div>
+              </div>
+              <div className="analytics-stat analytics-stat-divider">
+                <div className="analytics-stat-val" style={{color:'var(--color-primary)'}}>{totalCalories}</div>
+                <div className="analytics-stat-label">Calories</div>
+              </div>
+              <div className="analytics-stat analytics-stat-divider">
+                <div className="analytics-stat-val" style={{color:'var(--color-nutrition)'}}>{totalProtein}g</div>
+                <div className="analytics-stat-label">Protein</div>
+              </div>
+              <div className="analytics-stat analytics-stat-divider">
+                <div className="analytics-stat-val" style={{color:'var(--color-activity)'}}>🔥{streak}</div>
+                <div className="analytics-stat-label">Day Streak</div>
+              </div>
+            </div>
+
+            {/* ── CALORIE TREND ── */}
+            <div className="analytics-card">
+              <div className="analytics-card-header">
+                <div>
+                  <div className="analytics-card-title">📊 Calorie Trend</div>
+                  <div className="analytics-card-sub">Daily intake — last {chartRange === '7D' ? '7' : chartRange === '30D' ? '30' : '90'} days</div>
                 </div>
+                <div className="analytics-card-badge">{dailyHistory.length} days</div>
+              </div>
+              {dailyHistory.length === 0 ? (
+                <div className="empty-state"><span>📊</span><p>Log food to see your trend</p></div>
               ) : (
-                <ResponsiveContainer width="100%" height={220}>
-                  <LineChart data={dailyHistory}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#F0F0F4" vertical={false}/>
-                    <XAxis dataKey="day" tick={{fontSize:10,fill:'#9898AA'}} axisLine={false} tickLine={false}
-                      interval={Math.max(0, Math.floor(dailyHistory.length / 8))}/>
-                    <YAxis tick={{fontSize:11,fill:'#9898AA'}} axisLine={false} tickLine={false}/>
+                <ResponsiveContainer width="100%" height={200}>
+                  <AreaChart data={chartRange === '7D' ? dailyHistory.slice(-7) : chartRange === '30D' ? dailyHistory.slice(-30) : dailyHistory}>
+                    <defs>
+                      <linearGradient id="calGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#5B4FD4" stopOpacity={0.15}/>
+                        <stop offset="95%" stopColor="#5B4FD4" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-light)" vertical={false}/>
+                    <XAxis dataKey="day" tick={{fontSize:10,fill:'var(--color-ink-tertiary)'}} axisLine={false} tickLine={false}
+                      interval={Math.max(0, Math.floor(dailyHistory.length / 6))}/>
+                    <YAxis tick={{fontSize:10,fill:'var(--color-ink-tertiary)'}} axisLine={false} tickLine={false} width={36}/>
                     <Tooltip {...tooltipStyle}
-                      formatter={(value, name) => [`${value} cal`, 'Calories']}
-                      labelFormatter={(label, payload) => payload && payload[0] ? payload[0].payload.date : label}/>
-                    <Line type="monotone" dataKey="calories" stroke="#5B4FD4" strokeWidth={2.5}
-                      dot={{fill:'#5B4FD4',strokeWidth:0,r:2}} activeDot={{r:5}} name="Calories"/>
-                  </LineChart>
+                      formatter={(v) => [`${v} cal`, 'Calories']}
+                      labelFormatter={(label, payload) => payload?.[0]?.payload?.date || label}/>
+                    <Area type="monotone" dataKey="calories" stroke="#5B4FD4" strokeWidth={2.5}
+                      fill="url(#calGrad)" dot={false} activeDot={{r:5,fill:'#5B4FD4'}} name="Calories"/>
+                  </AreaChart>
                 </ResponsiveContainer>
               )}
             </div>
 
-            {/* MACRO PIE CHART */}
-            <div className="progress-card">
-              <h3>🥧 Today's Macro Breakdown</h3>
-              <p style={{fontSize:'12px',color:'#9898AA',marginBottom:'16px'}}>Visual breakdown of your macros today</p>
-              {totalCalories === 0 ? (
-                <div className="empty-state">
-                  <span>🥧</span>
-                  <p>Log some food to see your macro breakdown</p>
+            {/* ── MACRO DONUT ── */}
+            <div className="analytics-card">
+              <div className="analytics-card-header">
+                <div>
+                  <div className="analytics-card-title">🥧 Macro Breakdown</div>
+                  <div className="analytics-card-sub">Today's distribution</div>
                 </div>
+              </div>
+              {totalCalories === 0 ? (
+                <div className="empty-state"><span>🥧</span><p>Log food to see macros</p></div>
               ) : (
-                <div style={{display:'flex',alignItems:'center',gap:'24px',flexWrap:'wrap'}}>
-                  <ResponsiveContainer width={200} height={200}>
+                <div className="macro-donut-layout">
+                  <ResponsiveContainer width={160} height={160}>
                     <PieChart>
-                      <Pie data={pieData} cx="50%" cy="50%" innerRadius={55} outerRadius={85}
-                        paddingAngle={3} dataKey="value">
-                        {pieData.map((_, index) => (
-                          <Cell key={index} fill={pieColors[index]}/>
-                        ))}
+                      <Pie data={pieData} cx="50%" cy="50%" innerRadius={48} outerRadius={72}
+                        paddingAngle={3} dataKey="value" startAngle={90} endAngle={-270}>
+                        {pieData.map((_, i) => <Cell key={i} fill={pieColors[i]}/>)}
                       </Pie>
                       <Tooltip
-                        formatter={(value, name, props) => [`${props.payload.grams}g (${value} cal)`, name]}
-                        contentStyle={{background: darkMode ? '#1a1a2e' : '#fff', border: darkMode ? '1px solid rgba(255,255,255,.1)' : '.5px solid #EBEBF0', borderRadius:'12px', fontSize:'12px'}}
-                      />
+                        formatter={(v, n, p) => [`${p.payload.grams}g (${v} cal)`, n]}
+                        contentStyle={{background:'var(--color-surface)',border:'.5px solid var(--color-border)',borderRadius:'12px',fontSize:'12px'}}/>
                     </PieChart>
                   </ResponsiveContainer>
-                  <div style={{flex:1,display:'flex',flexDirection:'column',gap:'12px',minWidth:'160px'}}>
+                  <div className="macro-donut-legend">
                     {pieData.map((m, i) => (
-                      <div key={m.name} style={{display:'flex',alignItems:'center',gap:'10px'}}>
-                        <div style={{width:'10px',height:'10px',borderRadius:'50%',background:pieColors[i],flexShrink:0}}/>
-                        <div style={{flex:1}}>
-                          <div style={{display:'flex',justifyContent:'space-between',marginBottom:'4px'}}>
-                            <span style={{fontSize:'12px',fontWeight:'600',color: darkMode ? '#F0F0FF' : '#0A0A14'}}>{m.name}</span>
-                            <span style={{fontSize:'11px',color:'#9898AA'}}>{m.grams}g · {m.pct}%</span>
-                          </div>
-                          <div style={{height:'4px',background: darkMode ? 'rgba(255,255,255,.08)' : '#F0F0F4',borderRadius:'2px',overflow:'hidden'}}>
-                            <div style={{height:'100%',width:`${m.pct}%`,background:pieColors[i],borderRadius:'2px'}}/>
-                          </div>
+                      <div key={m.name} className="macro-legend-row">
+                        <div className="macro-legend-dot" style={{background:pieColors[i]}}/>
+                        <div className="macro-legend-info">
+                          <div className="macro-legend-name">{m.name}</div>
+                          <div className="macro-legend-val">{m.grams}g · {m.pct}%</div>
+                        </div>
+                        <div className="macro-legend-bar-wrap">
+                          <div className="macro-legend-bar" style={{width:`${m.pct}%`,background:pieColors[i]}}/>
                         </div>
                       </div>
                     ))}
-                    <div style={{marginTop:'4px',padding:'10px 12px',background: darkMode ? 'rgba(255,255,255,.04)' : '#F7F7FA',borderRadius:'10px',border: darkMode ? '.5px solid rgba(255,255,255,.06)' : '.5px solid #EBEBF0'}}>
-                      <div style={{fontSize:'11px',color:'#9898AA',marginBottom:'2px'}}>Total Calories</div>
-                      <div style={{fontSize:'15px',fontWeight:'700',color: darkMode ? '#F0F0FF' : '#0A0A14'}}>{totalCalories} kcal</div>
+                    <div className="macro-total-pill">
+                      <span className="macro-total-label">Total</span>
+                      <span className="macro-total-val">{totalCalories} kcal</span>
                     </div>
                   </div>
                 </div>
               )}
             </div>
 
-            <div className="progress-card">
-              <h3>📈 Weekly Calories</h3>
-              <p style={{fontSize:'12px',color:'#9898AA',marginBottom:'16px'}}>Last 7 days calorie intake</p>
+            {/* ── WEEKLY MULTI-MACRO CHART ── */}
+            <div className="analytics-card">
+              <div className="analytics-card-header">
+                <div>
+                  <div className="analytics-card-title">💪 Macro Trends</div>
+                  <div className="analytics-card-sub">Protein · Carbs · Fat — last {chartRange === '7D' ? '7' : chartRange === '30D' ? '30' : '90'} days</div>
+                </div>
+                <div className="chart-legend-pills">
+                  <span className="legend-pill" style={{background:'rgba(91,79,212,.1)',color:'#5B4FD4'}}>P</span>
+                  <span className="legend-pill" style={{background:'rgba(29,158,117,.1)',color:'#1D9E75'}}>C</span>
+                  <span className="legend-pill" style={{background:'rgba(232,130,12,.1)',color:'#E8820C'}}>F</span>
+                </div>
+              </div>
               <ResponsiveContainer width="100%" height={200}>
-                <LineChart data={weeklyData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#F0F0F4" vertical={false}/>
-                  <XAxis dataKey="day" tick={{fontSize:11,fill:'#9898AA'}} axisLine={false} tickLine={false}/>
-                  <YAxis tick={{fontSize:11,fill:'#9898AA'}} axisLine={false} tickLine={false}/>
+                <LineChart data={chartRange === '7D' ? weeklyData : chartRange === '30D' ? dailyHistory.slice(-30) : dailyHistory}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-light)" vertical={false}/>
+                  <XAxis dataKey="day" tick={{fontSize:10,fill:'var(--color-ink-tertiary)'}} axisLine={false} tickLine={false}/>
+                  <YAxis tick={{fontSize:10,fill:'var(--color-ink-tertiary)'}} axisLine={false} tickLine={false} width={28}/>
                   <Tooltip {...tooltipStyle}/>
-                  <Line type="monotone" dataKey="calories" stroke="#5B4FD4" strokeWidth={2.5}
-                    dot={{fill:'#5B4FD4',strokeWidth:0,r:4}} activeDot={{r:6}} name="Calories"/>
+                  <Line type="monotone" dataKey="protein" stroke="#5B4FD4" strokeWidth={2} dot={false} activeDot={{r:4}} name="Protein (g)"/>
+                  <Line type="monotone" dataKey="carbs" stroke="#1D9E75" strokeWidth={2} dot={false} activeDot={{r:4}} name="Carbs (g)"/>
+                  <Line type="monotone" dataKey="fat" stroke="#E8820C" strokeWidth={2} dot={false} activeDot={{r:4}} name="Fat (g)"/>
                 </LineChart>
               </ResponsiveContainer>
             </div>
-            <div className="progress-card">
-              <h3>💪 Weekly Macros</h3>
-              <p style={{fontSize:'12px',color:'#9898AA',marginBottom:'16px'}}>Protein, Carbs and Fat — last 7 days</p>
-              <ResponsiveContainer width="100%" height={200}>
-                <LineChart data={weeklyData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#F0F0F4" vertical={false}/>
-                  <XAxis dataKey="day" tick={{fontSize:11,fill:'#9898AA'}} axisLine={false} tickLine={false}/>
-                  <YAxis tick={{fontSize:11,fill:'#9898AA'}} axisLine={false} tickLine={false}/>
-                  <Tooltip {...tooltipStyle}/>
-                  <Line type="monotone" dataKey="protein" stroke="#5B4FD4" strokeWidth={2.5} dot={{fill:'#5B4FD4',strokeWidth:0,r:3}} activeDot={{r:5}} name="Protein (g)"/>
-                  <Line type="monotone" dataKey="carbs" stroke="#1D9E75" strokeWidth={2.5} dot={{fill:'#1D9E75',strokeWidth:0,r:3}} activeDot={{r:5}} name="Carbs (g)"/>
-                  <Line type="monotone" dataKey="fat" stroke="#E8820C" strokeWidth={2.5} dot={{fill:'#E8820C',strokeWidth:0,r:3}} activeDot={{r:5}} name="Fat (g)"/>
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
+
+            {/* ── WEIGHT TREND ── */}
             {weightLogs.length > 1 && (
-              <div className="progress-card">
-                <h3>⚖️ Weight Trend</h3>
-                <p style={{fontSize:'12px',color:'#9898AA',marginBottom:'16px'}}>Your weight journey over time</p>
-                <ResponsiveContainer width="100%" height={200}>
-                  <LineChart data={[...weightLogs].reverse().slice(-7).map(w => ({
+              <div className="analytics-card">
+                <div className="analytics-card-header">
+                  <div>
+                    <div className="analytics-card-title">⚖️ Weight Trend</div>
+                    <div className="analytics-card-sub">Your journey over time</div>
+                  </div>
+                  <div className={`weight-delta-badge ${weightLogs[0].weightLbs <= weightLogs[weightLogs.length-1].weightLbs ? 'weight-delta-down' : 'weight-delta-up'}`}>
+                    {weightLogs[0].weightLbs <= weightLogs[weightLogs.length-1].weightLbs
+                      ? `📉 −${(weightLogs[weightLogs.length-1].weightLbs - weightLogs[0].weightLbs).toFixed(1)} lbs`
+                      : `📈 +${(weightLogs[0].weightLbs - weightLogs[weightLogs.length-1].weightLbs).toFixed(1)} lbs`}
+                  </div>
+                </div>
+                <ResponsiveContainer width="100%" height={180}>
+                  <AreaChart data={[...weightLogs].reverse().slice(-(chartRange === '7D' ? 7 : chartRange === '30D' ? 30 : 90)).map(w => ({
                     date: new Date(w.date).toLocaleDateString('en-US',{month:'short',day:'numeric'}),
                     weight: w.weightLbs
                   }))}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#F0F0F4" vertical={false}/>
-                    <XAxis dataKey="date" tick={{fontSize:11,fill:'#9898AA'}} axisLine={false} tickLine={false}/>
-                    <YAxis tick={{fontSize:11,fill:'#9898AA'}} axisLine={false} tickLine={false} domain={['dataMin - 2','dataMax + 2']}/>
+                    <defs>
+                      <linearGradient id="weightGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#1D9E75" stopOpacity={0.15}/>
+                        <stop offset="95%" stopColor="#1D9E75" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-light)" vertical={false}/>
+                    <XAxis dataKey="date" tick={{fontSize:10,fill:'var(--color-ink-tertiary)'}} axisLine={false} tickLine={false}/>
+                    <YAxis tick={{fontSize:10,fill:'var(--color-ink-tertiary)'}} axisLine={false} tickLine={false} domain={['dataMin - 2','dataMax + 2']} width={36}/>
                     <Tooltip {...tooltipStyle}/>
-                    <Line type="monotone" dataKey="weight" stroke="#1D9E75" strokeWidth={2.5}
-                      dot={{fill:'#1D9E75',strokeWidth:0,r:4}} activeDot={{r:6}} name="Weight (lbs)"/>
-                  </LineChart>
+                    <Area type="monotone" dataKey="weight" stroke="#1D9E75" strokeWidth={2.5}
+                      fill="url(#weightGrad)" dot={false} activeDot={{r:5,fill:'#1D9E75'}} name="Weight (lbs)"/>
+                  </AreaChart>
                 </ResponsiveContainer>
-                <div className="weight-change">
-                  {weightLogs[0].weightLbs < weightLogs[weightLogs.length-1].weightLbs
-                    ? `📉 Lost ${(weightLogs[weightLogs.length-1].weightLbs - weightLogs[0].weightLbs).toFixed(1)} lbs total`
-                    : `📈 Gained ${(weightLogs[0].weightLbs - weightLogs[weightLogs.length-1].weightLbs).toFixed(1)} lbs total`}
-                </div>
               </div>
             )}
-            <div className="progress-card">
-              <h3>Goal Progress</h3>
+
+            {/* ── GOAL PROGRESS ── */}
+            <div className="analytics-card">
+              <div className="analytics-card-header">
+                <div className="analytics-card-title">🎯 Today's Goals</div>
+              </div>
               {[
-                {label:'Calories',val:totalCalories,goal:dailyGoal,unit:'cal'},
-                {label:'Protein',val:totalProtein,goal:proteinGoal,unit:'g'},
-                {label:'Carbs',val:totalCarbs,goal:carbsGoal,unit:'g'},
-                {label:'Fat',val:totalFat,goal:fatGoal,unit:'g'},
-              ].map(item => (
-                <div key={item.label} className="progress-bar-section">
-                  <div className="progress-bar-label"><span>{item.label}</span><span>{item.val} / {item.goal}{item.unit}</span></div>
-                  <div className="progress-bar-bg"><div className="progress-bar-fill" style={{width:`${Math.min((item.val/item.goal)*100,100)}%`}}/></div>
-                </div>
-              ))}
+                {label:'Calories',val:totalCalories,goal:dailyGoal,unit:'cal',color:'var(--color-primary)'},
+                {label:'Protein',val:totalProtein,goal:proteinGoal,unit:'g',color:'#5B4FD4'},
+                {label:'Carbs',val:totalCarbs,goal:carbsGoal,unit:'g',color:'var(--color-nutrition)'},
+                {label:'Fat',val:totalFat,goal:fatGoal,unit:'g',color:'var(--color-activity)'},
+              ].map(item => {
+                const pct = Math.min(Math.round((item.val / item.goal) * 100), 100);
+                return (
+                  <div key={item.label} className="goal-bar-row">
+                    <div className="goal-bar-meta">
+                      <span className="goal-bar-name">{item.label}</span>
+                      <span className="goal-bar-nums">{item.val} / {item.goal}{item.unit}</span>
+                      <span className="goal-bar-pct" style={{color:item.color}}>{pct}%</span>
+                    </div>
+                    <div className="goal-bar-track">
+                      <div className="goal-bar-fill" style={{width:`${pct}%`,background:item.color}}/>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
-            <div className="progress-card">
-              <h3>⚖️ Log Weight</h3>
+
+            {/* ── LOG WEIGHT ── */}
+            <div className="analytics-card">
+              <div className="analytics-card-header">
+                <div className="analytics-card-title">⚖️ Log Weight</div>
+              </div>
               <div className="weight-input-row">
                 <input type="number" className="weight-input" placeholder="Enter weight (lbs)"
                   value={weightLbs} onChange={e => setWeightLbs(e.target.value)}
@@ -1563,14 +1707,15 @@ function App() {
                       <span className="weight-date">{new Date(w.date).toLocaleDateString('en-US',{month:'short',day:'numeric'})}</span>
                       <span className="weight-val">{w.weightLbs} lbs</span>
                       <button onClick={() => deleteWeight(w.id)}
-                        style={{background:'transparent',border:'none',color:'#E4E4EC',cursor:'pointer',fontSize:'14px'}}
-                        onMouseOver={e=>e.target.style.color='#E85A5A'}
-                        onMouseOut={e=>e.target.style.color='#E4E4EC'}>🗑️</button>
+                        className="weight-delete-btn"
+                        onMouseOver={e=>e.currentTarget.style.color='var(--color-danger)'}
+                        onMouseOut={e=>e.currentTarget.style.color='var(--color-border)'}>🗑️</button>
                     </div>
                   ))}
                 </div>
               )}
             </div>
+
           </div>
         )}
 
@@ -1579,11 +1724,11 @@ function App() {
           <div className="tab-content">
             <div className="progress-card">
               <h3>🏆 Achievements</h3>
-              <p style={{fontSize:'12px',color:'#9898AA',marginBottom:'12px'}}>{unlockedCount} of {achievements.length} unlocked</p>
+              <p className="tab-sub-label">{unlockedCount} of {achievements.length} unlocked</p>
               <div className="achievements-progress-bar">
                 <div className="achievements-progress-fill" style={{width:`${(unlockedCount/achievements.length)*100}%`}}/>
               </div>
-              <div style={{fontSize:'11px',color:'#9898AA',marginTop:'6px',textAlign:'right'}}>{Math.round((unlockedCount/achievements.length)*100)}% complete</div>
+              <div className="tab-micro-label" style={{textAlign:'right'}}>{Math.round((unlockedCount/achievements.length)*100)}% complete</div>
             </div>
             <div className="achievements-grid">
               {achievements.map(a => (
@@ -1629,8 +1774,8 @@ function App() {
               <div className="progress-card">
                 <h3>Latest Reading</h3>
                 <div style={{textAlign:'center',padding:'12px 0'}}>
-                  <div style={{fontSize:'40px',fontWeight:'700',color:'#5B4FD4'}}>{bodyFatLogs[0].bodyFatPercent}%</div>
-                  <div style={{fontSize:'13px',color:'#9898AA',marginTop:'4px'}}>
+                  <div className="bf-reading-val">{bodyFatLogs[0].bodyFatPercent}%</div>
+                  <div className="bf-reading-cat">
                     {getBodyFatCategory(bodyFatLogs[0].bodyFatPercent, profile.sex)}
                   </div>
                 </div>
@@ -1647,10 +1792,7 @@ function App() {
                     <div key={b.id} className="weight-item">
                       <span className="weight-date">{new Date(b.date).toLocaleDateString('en-US',{month:'short',day:'numeric'})}</span>
                       <span className="weight-val">{b.bodyFatPercent}%</span>
-                      <button onClick={() => deleteBodyFat(b.id)}
-                        style={{background:'transparent',border:'none',color:'#E4E4EC',cursor:'pointer',fontSize:'14px'}}
-                        onMouseOver={e=>e.target.style.color='#E85A5A'}
-                        onMouseOut={e=>e.target.style.color='#E4E4EC'}>🗑️</button>
+                      <button onClick={() => deleteBodyFat(b.id)} className="delete-btn">🗑️</button>
                     </div>
                   ))}
                 </div>
@@ -1662,56 +1804,138 @@ function App() {
         {/* AI COACH */}
         {activeTab === 'coach' && (
           <div className="tab-content">
-            <div className="progress-card">
-              <h3>🤖 AI Health Coach</h3>
-              <p style={{fontSize:'12px',color:'#9898AA',marginBottom:'16px'}}>Powered by Gemini AI — ask anything about your health and nutrition</p>
-              <div className="coach-context">
-                <div className="coach-context-item"><span>🎯 Goal</span><strong>{profile.goal}</strong></div>
-                <div className="coach-context-item"><span>🔥 Calories</span><strong>{totalCalories}/{dailyGoal}</strong></div>
-                <div className="coach-context-item"><span>💪 Protein</span><strong>{totalProtein}g/{proteinGoal}g</strong></div>
-                <div className="coach-context-item"><span>🏃 Burned</span><strong>{totalBurned} cal</strong></div>
+
+            {/* ── COACH HERO ── */}
+            <div className="coach-hero">
+              <div className="coach-hero-left">
+                <div className="coach-avatar">🤖</div>
+                <div>
+                  <div className="coach-hero-title">AI Health Coach</div>
+                  <div className="coach-hero-sub">Powered by Gemini AI</div>
+                </div>
+              </div>
+              <div className="coach-hero-score">
+                <div className="coach-score-num">{healthScore}</div>
+                <div className="coach-score-label">Health Score</div>
               </div>
             </div>
-            <div className="progress-card">
-              <div className="chat-messages">
+
+            {/* ── INSIGHT CHIPS ── */}
+            <div className="coach-insights">
+              <div className={`coach-insight-chip ${caloriePercent >= 90 && caloriePercent <= 110 ? 'chip-green' : caloriePercent > 110 ? 'chip-orange' : 'chip-purple'}`}>
+                {caloriePercent >= 90 && caloriePercent <= 110 ? '✅' : caloriePercent > 110 ? '⚠️' : '📊'}
+                <span>{Math.round(caloriePercent)}% of calorie goal</span>
+              </div>
+              <div className={`coach-insight-chip ${totalProtein >= proteinGoal ? 'chip-green' : 'chip-purple'}`}>
+                {totalProtein >= proteinGoal ? '💪' : '🥩'}
+                <span>{totalProtein}g / {proteinGoal}g protein</span>
+              </div>
+              {streak > 0 && (
+                <div className="coach-insight-chip chip-orange">
+                  🔥<span>{streak} day streak</span>
+                </div>
+              )}
+            </div>
+
+            {/* ── CONTEXT GRID ── */}
+            <div className="coach-context">
+              <div className="coach-context-item">
+                <span className="coach-ctx-icon">🎯</span>
+                <div className="coach-ctx-body">
+                  <div className="coach-ctx-label">Goal</div>
+                  <div className="coach-ctx-val">{profile.goal === 'lose' ? 'Lose Weight' : profile.goal === 'gain' ? 'Gain Muscle' : 'Maintain'}</div>
+                </div>
+              </div>
+              <div className="coach-context-item">
+                <span className="coach-ctx-icon">🔥</span>
+                <div className="coach-ctx-body">
+                  <div className="coach-ctx-label">Calories</div>
+                  <div className="coach-ctx-val">{totalCalories} / {dailyGoal}</div>
+                </div>
+              </div>
+              <div className="coach-context-item">
+                <span className="coach-ctx-icon">💪</span>
+                <div className="coach-ctx-body">
+                  <div className="coach-ctx-label">Protein</div>
+                  <div className="coach-ctx-val">{totalProtein}g / {proteinGoal}g</div>
+                </div>
+              </div>
+              <div className="coach-context-item">
+                <span className="coach-ctx-icon">🏃</span>
+                <div className="coach-ctx-body">
+                  <div className="coach-ctx-label">Burned</div>
+                  <div className="coach-ctx-val">{totalBurned} cal</div>
+                </div>
+              </div>
+            </div>
+
+            {/* ── CHAT PANEL ── */}
+            <div className="coach-chat-panel">
+              <div className="chat-messages" id="chatMessages">
                 {chatHistory.length === 0 && (
                   <div className="chat-welcome">
-                    <div style={{fontSize:'40px',marginBottom:'12px'}}>🤖</div>
-                    <div style={{fontSize:'15px',fontWeight:'700',color: darkMode ? '#F0F0FF' : '#0A0A14',marginBottom:'6px'}}>Hi {currentUser}! I'm your AI Coach</div>
-                    <div style={{fontSize:'12px',color:'#9898AA',marginBottom:'20px'}}>Ask me anything about your nutrition, fitness goals, or health!</div>
+                    <div className="chat-welcome-avatar">🤖</div>
+                    <div className="chat-welcome-title">Hi {profile?.firstName || currentUser}! I'm your AI Coach</div>
+                    <div className="chat-welcome-sub">Ask me anything about your nutrition, fitness, or health journey. I have full context of your today's stats.</div>
                     <div className="quick-prompts">
-                      {quickPrompts.map((p,i) => (
-                        <button key={i} className="quick-prompt-btn" onClick={() => setAiMessage(p)}>{p}</button>
+                      {[
+                        `Am I on track for my ${profile.goal === 'lose' ? 'weight loss' : profile.goal === 'gain' ? 'muscle gain' : 'maintenance'} goal today?`,
+                        totalCalories < dailyGoal * 0.5 ? 'What should I eat to hit my calorie goal?' : 'How can I balance my remaining macros?',
+                        totalProtein < proteinGoal ? `I'm ${proteinGoal - totalProtein}g short on protein — what should I eat?` : 'What high-protein snacks would you recommend?',
+                        streak > 2 ? `I have a ${streak}-day streak — how do I keep it going?` : 'How do I build a consistent healthy habit?',
+                        'Give me a quick workout for today',
+                        "What's a healthy meal I can make tonight?",
+                      ].map((p, i) => (
+                        <button key={i} className="quick-prompt-btn" onClick={() => { setAiMessage(p); setTimeout(askAiCoach, 50); }}>{p}</button>
                       ))}
                     </div>
                   </div>
                 )}
-                {chatHistory.map((msg,i) => (
+                {chatHistory.map((msg, i) => (
                   <div key={i} className={`chat-msg ${msg.role === 'user' ? 'chat-msg-user' : 'chat-msg-ai'}`}>
-                    {msg.role === 'ai' && <div className="chat-ai-icon">🤖</div>}
+                    {msg.role === 'ai' && <div className="chat-ai-avatar">🤖</div>}
                     <div className={`chat-bubble ${msg.role === 'user' ? 'chat-bubble-user' : 'chat-bubble-ai'}`}>
-                      {msg.text}
+                      {msg.text.split('\n').map((line, li) => (
+                        <span key={li}>
+                          {line.split(/(\*\*[^*]+\*\*)/).map((part, pi) =>
+                            part.startsWith('**') && part.endsWith('**')
+                              ? <strong key={pi}>{part.slice(2,-2)}</strong>
+                              : part
+                          )}
+                          {li < msg.text.split('\n').length - 1 && <br/>}
+                        </span>
+                      ))}
                     </div>
                   </div>
                 ))}
                 {aiLoading && (
                   <div className="chat-msg chat-msg-ai">
-                    <div className="chat-ai-icon">🤖</div>
+                    <div className="chat-ai-avatar">🤖</div>
                     <div className="chat-bubble chat-bubble-ai">
                       <span className="chat-typing"><span/><span/><span/></span>
                     </div>
                   </div>
                 )}
               </div>
+
+              {chatHistory.length > 0 && (
+                <div className="coach-suggestion-chips">
+                  {['Tell me more', 'What should I eat next?', 'Give me a workout'].map((s,i) => (
+                    <button key={i} className="suggestion-chip" onClick={() => { setAiMessage(s); setTimeout(askAiCoach, 50); }}>{s}</button>
+                  ))}
+                </div>
+              )}
+
               <div className="chat-input-row">
                 <input className="chat-input" placeholder="Ask your AI coach anything..."
                   value={aiMessage} onChange={e => setAiMessage(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && askAiCoach()}/>
-                <button className="chat-send-btn" onClick={askAiCoach} disabled={aiLoading}>
-                  {aiLoading ? <span className="spinner"/> : '→'}
+                  onKeyDown={e => e.key === 'Enter' && !aiLoading && askAiCoach()}/>
+                <button className="chat-send-btn" onClick={askAiCoach} disabled={aiLoading || !aiMessage.trim()}>
+                  {aiLoading ? <span className="chat-spinner"/> : <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>}
                 </button>
               </div>
             </div>
+
           </div>
         )}
 
@@ -1764,11 +1988,11 @@ function App() {
               </div>
               <div className="profile-field-full" style={{marginTop:'8px'}}>
   <label>Meal Reminders</label>
-  <div style={{marginTop:'10px',padding:'14px',background: darkMode ? 'rgba(255,255,255,.04)' : '#F7F7FA',borderRadius:'12px',border: darkMode ? '.5px solid rgba(255,255,255,.06)' : '.5px solid #EBEBF0'}}>
+  <div className="notif-settings-card">
     <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
       <div>
-        <div style={{fontSize:'13px',fontWeight:'600',color: darkMode ? '#F0F0FF' : '#0A0A14'}}>Push Notifications</div>
-        <div style={{fontSize:'11px',color:'#9898AA',marginTop:'2px'}}>Breakfast 8AM · Lunch 12PM · Dinner 6PM</div>
+        <div className="notif-settings-title">Push Notifications</div>
+        <div className="tab-micro-label">Breakfast 8AM · Lunch 12PM · Dinner 6PM</div>
       </div>
       <button
         onClick={async () => {
@@ -1782,7 +2006,7 @@ function App() {
             }
           }
         }}
-        style={{background:'#5B4FD4',color:'#fff',border:'none',borderRadius:'10px',padding:'8px 16px',fontSize:'12px',fontWeight:'600',cursor:'pointer'}}>
+        className="notif-enable-btn">
         {typeof Notification !== 'undefined' && Notification.permission === 'granted' ? '✅ Enabled' : 'Enable'}
       </button>
     </div>
@@ -1827,18 +2051,18 @@ function App() {
             {sleepLogs.length > 0 && (
               <div className="progress-card">
                 <h3>😴 Sleep History</h3>
-                <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'10px',marginBottom:'16px'}}>
-                  <div style={{textAlign:'center',padding:'12px',background:'#F0EFFD',borderRadius:'12px'}}>
-                    <div style={{fontSize:'22px',fontWeight:'700',color:'#5B4FD4'}}>{(sleepLogs.slice(0,7).reduce((s,l)=>s+l.hoursSlept,0)/Math.min(sleepLogs.length,7)).toFixed(1)}</div>
-                    <div style={{fontSize:'11px',color:'#9898AA',marginTop:'2px'}}>Avg Hours</div>
+                <div className="stat-tile-row">
+                  <div className="stat-tile stat-tile-purple">
+                    <div className="stat-tile-val">{(sleepLogs.slice(0,7).reduce((s,l)=>s+l.hoursSlept,0)/Math.min(sleepLogs.length,7)).toFixed(1)}</div>
+                    <div className="stat-tile-label">Avg Hours</div>
                   </div>
-                  <div style={{textAlign:'center',padding:'12px',background:'#EDFAF5',borderRadius:'12px'}}>
-                    <div style={{fontSize:'22px',fontWeight:'700',color:'#1D9E75'}}>{sleepLogs.length}</div>
-                    <div style={{fontSize:'11px',color:'#9898AA',marginTop:'2px'}}>Days Logged</div>
+                  <div className="stat-tile stat-tile-green">
+                    <div className="stat-tile-val">{sleepLogs.length}</div>
+                    <div className="stat-tile-label">Days Logged</div>
                   </div>
-                  <div style={{textAlign:'center',padding:'12px',background:'#FEF4E8',borderRadius:'12px'}}>
-                    <div style={{fontSize:'22px',fontWeight:'700',color:'#E8820C'}}>{sleepLogs[0]?.hoursSlept}h</div>
-                    <div style={{fontSize:'11px',color:'#9898AA',marginTop:'2px'}}>Last Night</div>
+                  <div className="stat-tile stat-tile-orange">
+                    <div className="stat-tile-val">{sleepLogs[0]?.hoursSlept}h</div>
+                    <div className="stat-tile-label">Last Night</div>
                   </div>
                 </div>
                 <div className="weight-list">
@@ -1846,19 +2070,16 @@ function App() {
                     <div key={s.id} className="weight-item">
                       <div>
                         <div style={{fontSize:'13px',fontWeight:'600'}}>{s.hoursSlept}h · {s.quality}</div>
-                        <div style={{fontSize:'11px',color:'#9898AA',marginTop:'2px'}}>
+                        <div className="tab-micro-label">
                           {new Date(s.date).toLocaleDateString('en-US',{month:'short',day:'numeric'})}
                           {s.bedtime && ` · ${s.bedtime}–${s.wakeTime}`}
                         </div>
                       </div>
                       <div style={{display:'flex',alignItems:'center',gap:'10px'}}>
-                        <span style={{fontSize:'12px',color:s.hoursSlept>=7?'#1D9E75':'#E8820C',fontWeight:'600',background:s.hoursSlept>=7?'#EDFAF5':'#FEF4E8',padding:'2px 8px',borderRadius:'20px'}}>
+                        <span className={`sleep-badge ${s.hoursSlept>=7?'sleep-badge-good':'sleep-badge-short'}`}>
                           {s.hoursSlept>=7?'✅ Good':'⚠️ Short'}
                         </span>
-                        <button onClick={()=>deleteSleep(s.id)}
-                          style={{background:'transparent',border:'none',cursor:'pointer',fontSize:'14px',color:'#ccc'}}
-                          onMouseOver={e=>e.target.style.color='#E85A5A'}
-                          onMouseOut={e=>e.target.style.color='#ccc'}>🗑️</button>
+                        <button onClick={()=>deleteSleep(s.id)} className="delete-btn">🗑️</button>
                       </div>
                     </div>
                   ))}
@@ -1875,13 +2096,13 @@ function App() {
               <h3 className="log-title">😊 Mood Tracker</h3>
               <p className="log-sub">Track your emotional wellbeing alongside your physical health</p>
               <div style={{marginBottom:'16px'}}>
-                <label style={{fontSize:'12px',fontWeight:'600',color:'#555',display:'block',marginBottom:'10px'}}>How are you feeling today? ({moodScore}/10)</label>
+                <label className="mood-slider-label">How are you feeling today? ({moodScore}/10)</label>
                 <div style={{display:'flex',alignItems:'center',gap:'12px'}}>
                   <span style={{fontSize:'28px'}}>{['','😭','😢','😟','😕','😐','🙂','😊','😄','🤩','🥳'][moodScore]}</span>
                   <input type="range" min="1" max="10" value={moodScore}
                     onChange={e=>setMoodScore(parseInt(e.target.value))}
-                    style={{flex:1,accentColor:'#5B4FD4',height:'6px',cursor:'pointer'}}/>
-                  <span style={{fontSize:'16px',fontWeight:'700',color:'#5B4FD4',minWidth:'20px'}}>{moodScore}</span>
+                    style={{flex:1,accentColor:'var(--color-primary)',height:'6px',cursor:'pointer'}}/>
+                  <span style={{fontSize:'16px',fontWeight:'700',color:'var(--color-primary)',minWidth:'20px'}}>{moodScore}</span>
                 </div>
               </div>
               <div className="profile-field-full"><label>Energy Level</label>
@@ -1909,18 +2130,18 @@ function App() {
             {moodLogs.length > 0 && (
               <div className="progress-card">
                 <h3>📈 Mood History</h3>
-                <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'10px',marginBottom:'16px'}}>
-                  <div style={{textAlign:'center',padding:'12px',background:'#F0EFFD',borderRadius:'12px'}}>
-                    <div style={{fontSize:'22px',fontWeight:'700',color:'#5B4FD4'}}>{(moodLogs.slice(0,7).reduce((s,m)=>s+m.moodScore,0)/Math.min(moodLogs.length,7)).toFixed(1)}</div>
-                    <div style={{fontSize:'11px',color:'#9898AA',marginTop:'2px'}}>Avg Mood</div>
+                <div className="stat-tile-row">
+                  <div className="stat-tile stat-tile-purple">
+                    <div className="stat-tile-val">{(moodLogs.slice(0,7).reduce((s,m)=>s+m.moodScore,0)/Math.min(moodLogs.length,7)).toFixed(1)}</div>
+                    <div className="stat-tile-label">Avg Mood</div>
                   </div>
-                  <div style={{textAlign:'center',padding:'12px',background:'#EDFAF5',borderRadius:'12px'}}>
-                    <div style={{fontSize:'28px'}}>{['','😭','😢','😟','😕','😐','🙂','😊','😄','🤩','🥳'][moodLogs[0]?.moodScore||5]}</div>
-                    <div style={{fontSize:'11px',color:'#9898AA',marginTop:'2px'}}>Latest</div>
+                  <div className="stat-tile stat-tile-green">
+                    <div className="stat-tile-val" style={{fontSize:'28px'}}>{['','😭','😢','😟','😕','😐','🙂','😊','😄','🤩','🥳'][moodLogs[0]?.moodScore||5]}</div>
+                    <div className="stat-tile-label">Latest</div>
                   </div>
-                  <div style={{textAlign:'center',padding:'12px',background:'#FEF4E8',borderRadius:'12px'}}>
-                    <div style={{fontSize:'22px',fontWeight:'700',color:'#E8820C'}}>{moodLogs.length}</div>
-                    <div style={{fontSize:'11px',color:'#9898AA',marginTop:'2px'}}>Days Logged</div>
+                  <div className="stat-tile stat-tile-orange">
+                    <div className="stat-tile-val">{moodLogs.length}</div>
+                    <div className="stat-tile-label">Days Logged</div>
                   </div>
                 </div>
                 <div className="weight-list">
@@ -1931,15 +2152,12 @@ function App() {
                           <span style={{fontSize:'20px'}}>{['','😭','😢','😟','😕','😐','🙂','😊','😄','🤩','🥳'][m.moodScore]}</span>
                           <span style={{fontSize:'13px',fontWeight:'600'}}>{m.moodLabel} ({m.moodScore}/10)</span>
                         </div>
-                        <div style={{fontSize:'11px',color:'#9898AA',marginTop:'3px'}}>
+                        <div className="tab-micro-label">
                           {new Date(m.date).toLocaleDateString('en-US',{month:'short',day:'numeric'})} · Energy: {m.energyLevel} · Stress: {m.stressLevel}
                         </div>
-                        {m.notes && <div style={{fontSize:'11px',color:'#555',marginTop:'2px',fontStyle:'italic'}}>"{m.notes}"</div>}
+                        {m.notes && <div className="tab-micro-label" style={{fontStyle:'italic'}}>"{m.notes}"</div>}
                       </div>
-                      <button onClick={()=>deleteMood(m.id)}
-                        style={{background:'transparent',border:'none',cursor:'pointer',fontSize:'14px',color:'#ccc'}}
-                        onMouseOver={e=>e.target.style.color='#E85A5A'}
-                        onMouseOut={e=>e.target.style.color='#ccc'}>🗑️</button>
+                      <button onClick={()=>deleteMood(m.id)} className="delete-btn">🗑️</button>
                     </div>
                   ))}
                 </div>
@@ -1983,7 +2201,7 @@ function App() {
             {supplementLogs.length > 0 && (
               <div className="progress-card">
                 <h3>💊 Today's Supplements</h3>
-                <p style={{fontSize:'12px',color:'#9898AA',marginBottom:'12px'}}>
+                <p className="tab-sub-label">
                   {supplementLogs.filter(s=>s.date===new Date().toISOString().split('T')[0]).length} taken today
                 </p>
                 <div className="weight-list">
@@ -1991,18 +2209,16 @@ function App() {
                     <div key={s.id} className="weight-item">
                       <div>
                         <div style={{fontSize:'13px',fontWeight:'600'}}>{s.supplementName}</div>
-                        <div style={{fontSize:'11px',color:'#9898AA',marginTop:'2px'}}>
+                        <div className="tab-micro-label">
                           {s.dosage}{s.unit} · {s.timeOfDay?.replace('_',' ')} · {new Date(s.date).toLocaleDateString('en-US',{month:'short',day:'numeric'})}
                         </div>
                       </div>
                       <div style={{display:'flex',alignItems:'center',gap:'10px'}}>
-                        <span style={{fontSize:'11px',fontWeight:'600',color:'#5B4FD4',background:'#F0EFFD',padding:'2px 8px',borderRadius:'20px'}}>
+                        <span className="supp-logged-pill">
                           ✓ Logged
                         </span>
                         <button onClick={()=>deleteSupplement(s.id)}
-                          style={{background:'transparent',border:'none',cursor:'pointer',fontSize:'14px',color:'#ccc'}}
-                          onMouseOver={e=>e.target.style.color='#E85A5A'}
-                          onMouseOut={e=>e.target.style.color='#ccc'}>🗑️</button>
+                          className="delete-btn">🗑️</button>
                       </div>
                     </div>
                   ))}
