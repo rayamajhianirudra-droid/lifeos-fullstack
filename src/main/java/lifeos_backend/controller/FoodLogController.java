@@ -13,7 +13,6 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/foodlogs")
-@CrossOrigin(origins = "*")
 public class FoodLogController {
 
     private final FoodLogService foodLogService;
@@ -66,8 +65,12 @@ public class FoodLogController {
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteFoodLog(@PathVariable Long id) {
-        foodLogService.deleteFoodLog(id);
-        return ResponseEntity.ok().build();
+    public ResponseEntity<Void> deleteFoodLog(
+            @RequestHeader("Authorization") String authHeader,
+            @PathVariable Long id) {
+        Long userId = getUserIdFromToken(authHeader);
+        return foodLogService.deleteFoodLogForUser(id, userId)
+                ? ResponseEntity.ok().build()
+                : ResponseEntity.notFound().build();
     }
 }

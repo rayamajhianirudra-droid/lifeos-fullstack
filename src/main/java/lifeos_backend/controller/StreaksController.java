@@ -19,7 +19,6 @@ import java.util.*;
 
 @RestController
 @RequestMapping("/api/streaks")
-@CrossOrigin(origins = "*")
 public class StreaksController {
 
     @Autowired private JwtService jwtService;

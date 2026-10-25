@@ -11,7 +11,6 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/weekly-report")
-@CrossOrigin(origins = "*")
 public class WeeklyReportController {
 
     private final WeeklyReportService weeklyReportService;

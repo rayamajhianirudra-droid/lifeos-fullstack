@@ -16,7 +16,6 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/sleep")
-@CrossOrigin(origins = "*")
 public class SleepController {
 
     @Autowired private SleepRepository sleepRepository;

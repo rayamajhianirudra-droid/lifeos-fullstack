@@ -14,7 +14,6 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/supplements")
-@CrossOrigin(origins = "*")
 public class SupplementController {
 
     @Autowired private SupplementRepository supplementRepository;
@@ -53,7 +52,15 @@ public class SupplementController {
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@RequestHeader("Authorization") String auth,
                                         @PathVariable Long id) {
-        supplementRepository.deleteById(id);
-        return ResponseEntity.ok().build();
+        // Only delete the row if it belongs to the logged-in user; 404 otherwise
+        // (404, not 403, so other users' IDs aren't confirmed to exist).
+        Long userId = getUserId(auth);
+        return supplementRepository.findById(id)
+                .filter(row -> userId.equals(row.getUserId()))
+                .map(row -> {
+                    supplementRepository.delete(row);
+                    return ResponseEntity.ok().<Void>build();
+                })
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 }

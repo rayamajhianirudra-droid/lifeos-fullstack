@@ -219,6 +219,29 @@ function App() {
   const [showNotifDropdown, setShowNotifDropdown] = useState(false);
   const [chartRange, setChartRange] = useState('7d');
 
+  // If the server rejects our saved login (expired, or the signing key was rotated),
+  // clear it and show the sign-in screen instead of a dashboard where every request
+  // silently fails. Only reacts to our own API, and never to the login/register calls.
+  useEffect(() => {
+    const id = axios.interceptors.response.use(
+      res => res,
+      err => {
+        const status = err.response?.status;
+        const url = err.config?.url || '';
+        const sentToken = !!err.config?.headers?.Authorization;
+        if ((status === 401 || status === 403) && sentToken && url.startsWith(API) && !url.includes('/auth/')) {
+          localStorage.removeItem('token');
+          localStorage.removeItem('userName');
+          setToken(null);
+          setCurrentUser(null);
+          setAuthMessage('Your session expired. Please sign in again.');
+        }
+        return Promise.reject(err);
+      }
+    );
+    return () => axios.interceptors.response.eject(id);
+  }, []);
+
   const calculateDailyGoal = (p) => {
     const weightKg = p.weightLbs * 0.453592;
     const heightCm = (p.heightFeet * 30.48) + (p.heightInches * 2.54);
@@ -636,7 +659,9 @@ function App() {
       setToken(res.data.token);
       setCurrentUser(res.data.name);
     } catch (err) {
-      setAuthMessage('❌ ' + (err.response?.data || 'Something went wrong'));
+      const data = err.response?.data;
+      const msg = typeof data === 'string' ? data : (data?.message || data?.error || 'Something went wrong');
+      setAuthMessage('❌ ' + msg);
     }
   };
 

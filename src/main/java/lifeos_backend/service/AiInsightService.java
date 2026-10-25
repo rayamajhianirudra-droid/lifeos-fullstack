@@ -6,13 +6,22 @@ import org.springframework.http.MediaType;
 import java.net.URI;
 import java.util.List;
 import java.util.Map;
-import java.util.HashMap;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 
 @Service
 public class AiInsightService {
     private final WebClient webClient;
     private final String apiKey = System.getenv("GEMINI_API_KEY");
-    private final HashMap<String, String> cache = new HashMap<>();
+    // Bounded, thread-safe LRU cache: keeps the 1000 most recently used insights.
+    private static final int CACHE_MAX = 1000;
+    private final Map<String, String> cache = Collections.synchronizedMap(
+            new LinkedHashMap<String, String>(256, 0.75f, true) {
+                @Override
+                protected boolean removeEldestEntry(Map.Entry<String, String> eldest) {
+                    return size() > CACHE_MAX;
+                }
+            });
 
     public AiInsightService() {
         this.webClient = WebClient.builder()
@@ -21,11 +30,11 @@ public class AiInsightService {
     }
 
     public String getFoodInsight(String foodName) {
+        if (foodName == null || foodName.isBlank()) return "A nutritious choice for your health!";
+        if (foodName.length() > 100) foodName = foodName.substring(0, 100);
         String key = foodName.toLowerCase().trim();
-        if (cache.containsKey(key)) {
-            System.out.println("CACHE HIT: " + key);
-            return cache.get(key);
-        }
+        String cached = cache.get(key);
+        if (cached != null) return cached;
         try {
             Map<String, Object> body = Map.of(
                     "contents", List.of(
@@ -47,7 +56,6 @@ public class AiInsightService {
             List<Map> parts = (List<Map>) content.get("parts");
             String insight = (String) parts.get(0).get("text");
             cache.put(key, insight);
-            System.out.println("CACHE STORED: " + key);
             return insight;
         } catch (Exception e) {
             System.out.println("AI ERROR: " + e.getMessage());
@@ -57,7 +65,6 @@ public class AiInsightService {
 
     public String getChatResponse(String message, String context, List<Map<String, String>> history) {
         try {
-            System.out.println("USING API KEY (first 10 chars): " + (apiKey != null ? apiKey.substring(0, Math.min(10, apiKey.length())) : "NULL"));
 
             String systemPrompt = "You are an encouraging, knowledgeable health and fitness coach inside the LifeOS app. "
                     + "Be warm but honest, keep responses concise (2-4 sentences unless the user asks for detail), "
