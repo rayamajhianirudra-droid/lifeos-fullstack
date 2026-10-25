@@ -1,5 +1,6 @@
 package lifeos_backend.controller;
 
+import lifeos_backend.service.LogDates;
 import lifeos_backend.model.CustomFood;
 import lifeos_backend.model.FoodLog;
 import lifeos_backend.repository.CustomFoodRepository;
@@ -71,7 +72,7 @@ public class CustomFoodController {
         fl.setProtein(cf.getProtein());
         fl.setCarbs(cf.getCarbs());
         fl.setFat(cf.getFat());
-        fl.setDate(LocalDate.now());
+        fl.setDate(LogDates.resolve(body.get("date")));
         fl.setMealType(body.getOrDefault("mealType", "snack"));
         fl.setInsight("Custom food logged ✨");
         return ResponseEntity.ok(foodLogRepository.save(fl));

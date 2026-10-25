@@ -1,5 +1,6 @@
 package lifeos_backend.controller;
 
+import lifeos_backend.service.LogDates;
 import lifeos_backend.model.SleepLog;
 import lifeos_backend.repository.SleepRepository;
 import lifeos_backend.repository.UserRepository;
@@ -60,8 +61,7 @@ public class SleepController {
         s.setWakeTime((String) body.getOrDefault("wakeTime", ""));
         s.setNotes((String) body.getOrDefault("notes", ""));
         // Support optional date (defaults to today)
-        String dateStr = body.containsKey("date") ? body.get("date").toString() : null;
-        s.setDate(dateStr != null && !dateStr.isBlank() ? LocalDate.parse(dateStr) : LocalDate.now());
+        s.setDate(LogDates.resolve(body.get("date")));
         return ResponseEntity.ok(sleepRepository.save(s));
     }
 

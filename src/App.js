@@ -6,6 +6,12 @@ import './App.css';
 const API = process.env.REACT_APP_API_URL || 'http://localhost:8080/api';
 const USDA_KEY = process.env.REACT_APP_USDA_KEY || '';
 
+// Calendar dates in the user's LOCAL time zone (YYYY-MM-DD).
+// Using UTC here made the app's "day" end at 7 pm in Chicago.
+const toLocalISO = (d = new Date()) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const parseLocalISO = (s) => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
+
 // ─────────────────────────────────────────────────────────────
 // LifeOS 3.0 dashboard visuals (module-level, no extra deps)
 // ─────────────────────────────────────────────────────────────
@@ -139,7 +145,7 @@ function App() {
   const [message, setMessage] = useState('');
   const [activeTab, setActiveTab] = useState('dashboard');
   const [water, setWater] = useState(() => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = toLocalISO();
     try {
       const saved = JSON.parse(localStorage.getItem('waterLog') || '{}');
       return saved.date === today ? (saved.count || 0) : 0;
@@ -150,7 +156,7 @@ function App() {
   const [newPassword, setNewPassword] = useState('');
   const [resetMessage, setResetMessage] = useState('');
   const [resetStep, setResetStep] = useState(1);
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedDate, setSelectedDate] = useState(toLocalISO());
   const [streak, setStreak] = useState(0);
   const [weightLbs, setWeightLbs] = useState('');
   const [weightLogs, setWeightLogs] = useState([]);
@@ -283,7 +289,7 @@ function App() {
 
   // Persist water intake daily — resets automatically at midnight via date key
   useEffect(() => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = toLocalISO();
     try {
       localStorage.setItem('waterLog', JSON.stringify({ date: today, count: water }));
     } catch { /* storage full or blocked */ }
@@ -453,7 +459,7 @@ function App() {
     if (!weightLbs) return;
     try {
       await axios.post(`${API}/weight`, {
-        weightLbs: parseFloat(weightLbs)
+        weightLbs: parseFloat(weightLbs), date: toLocalISO()
       }, { headers: { Authorization: `Bearer ${token}` } });
       setWeightLbs('');
       fetchWeightLogs();
@@ -524,6 +530,7 @@ function App() {
         durationMinutes: parseInt(exerciseDuration),
         caloriesBurned: calories,
         category: exerciseCategory,
+        date: selectedDate,
       }, { headers: { Authorization: `Bearer ${token}` } });
       setExerciseName('');
       setExerciseDuration('');
@@ -549,17 +556,18 @@ function App() {
     const newHistory = [...chatHistory, { role: 'user', text: userMsg }];
     setChatHistory(newHistory);
 
-    const context = `User stats: ${profile.age}yo ${profile.sex}, ${profile.weightLbs}lbs,
-    ${profile.heightFeet}'${profile.heightInches}", goal: ${profile.goal},
-    activity: ${profile.activity}. Daily calorie goal: ${dailyGoal} kcal.
-    Today: consumed ${totalCalories} cal, ${totalProtein}g protein, ${totalCarbs}g carbs,
-    ${totalFat}g fat. Burned ${totalBurned} cal. Water: ${water}/8 glasses.
-    Streak: ${streak} days. BMI: ${bmi} (${bmiLabel}).`;
-
     try {
       const res = await axios.post(`${API}/ai/chat`, {
         message: userMsg,
-        context: context,
+        // The server reads logged food/workouts/sleep/mood/weight from the database itself.
+        // We only send settings that still live in this browser, plus today's water count.
+        date: selectedDate,
+        profile: {
+          age: profile.age, sex: profile.sex, weightLbs: profile.weightLbs,
+          heightFeet: profile.heightFeet, heightInches: profile.heightInches,
+          goal: profile.goal, activity: profile.activity,
+          dailyGoal, proteinGoal, waterGlasses: water,
+        },
         // Prior turns only (the backend appends `message` itself); capped to bound token cost.
         history: chatHistory.slice(-10).map(t => ({ role: t.role, text: String(t.text || '').slice(0, 2000) }))
       }, { headers: { Authorization: `Bearer ${token}` } });
@@ -621,27 +629,27 @@ function App() {
   };
 
   const changeDate = (direction) => {
-    const current = new Date(selectedDate);
+    const current = parseLocalISO(selectedDate);
     current.setDate(current.getDate() + direction);
-    const newDate = current.toISOString().split('T')[0];
+    const newDate = toLocalISO(current);
     setSelectedDate(newDate);
     fetchFoodLogs(newDate);
     fetchExerciseLogs(newDate);
   };
 
   const goToToday = () => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = toLocalISO();
     setSelectedDate(today);
     fetchFoodLogs(today);
     fetchExerciseLogs(today);
   };
 
   const formatDateLabel = (dateStr) => {
-    const today = new Date().toISOString().split('T')[0];
-    const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+    const today = toLocalISO();
+    const yesterday = toLocalISO(new Date(Date.now() - 86400000));
     if (dateStr === today) return 'Today';
     if (dateStr === yesterday) return 'Yesterday';
-    return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    return parseLocalISO(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   };
 
   const handleAuth = async () => {
@@ -729,7 +737,7 @@ function App() {
       await axios.post(`${API}/foodlogs`, {
         foodName: food.name, calories: food.calories,
         protein: food.protein, carbs: food.carbs, fat: food.fat,
-        mealType: mealType
+        mealType: mealType, date: selectedDate
       }, { headers: { Authorization: `Bearer ${token}` } });
       setMessage('✅ ' + food.name.substring(0, 30) + ' logged!');
       setSearchQuery(''); setSearchResults([]);
@@ -852,7 +860,7 @@ function App() {
   ];
 
   const MET_VALUES = { cardio:8, strength:5, hiit:10, yoga:3, cycling:7, swimming:8, running:9, walking:4, sports:7 };
-  const isToday = selectedDate === new Date().toISOString().split('T')[0];
+  const isToday = selectedDate === toLocalISO();
   const getHour = () => new Date().getHours();
   const greeting = getHour() < 12 ? 'Good morning' : getHour() < 17 ? 'Good afternoon' : 'Good evening';
   const greetingEmoji = getHour() < 12 ? '☀️' : getHour() < 17 ? '🌤️' : '🌙';
@@ -922,7 +930,7 @@ function App() {
     if (!suppName.trim()) return setSuppMsg('Enter supplement name');
     try {
       await axios.post(`${API}/supplements`, {
-        supplementName: suppName, dosage: suppDosage, unit: suppUnit, timeOfDay: suppTime
+        supplementName: suppName, dosage: suppDosage, unit: suppUnit, timeOfDay: suppTime, date: toLocalISO()
       }, { headers: { Authorization: `Bearer ${token}` } });
       setSuppName(''); setSuppDosage(''); setSuppMsg('✅ Logged!');
       fetchSupplements();
@@ -948,7 +956,7 @@ function App() {
     try {
       await axios.post(`${API}/sleep`, {
         hoursSlept: parseFloat(sleepHours), quality: sleepQuality,
-        bedtime: sleepBedtime, wakeTime: sleepWakeTime, notes: sleepNotes
+        bedtime: sleepBedtime, wakeTime: sleepWakeTime, notes: sleepNotes, date: toLocalISO()
       }, { headers: { Authorization: `Bearer ${token}` } });
       setSleepHours(''); setSleepBedtime(''); setSleepWakeTime(''); setSleepNotes('');
       setSleepMsg('✅ Sleep logged!');
@@ -974,7 +982,7 @@ function App() {
     try {
       await axios.post(`${API}/mood`, {
         moodScore, moodLabel: labels[moodScore] || 'Good',
-        energyLevel: moodEnergy, stressLevel: moodStress, notes: moodNotes
+        energyLevel: moodEnergy, stressLevel: moodStress, notes: moodNotes, date: toLocalISO()
       }, { headers: { Authorization: `Bearer ${token}` } });
       setMoodNotes(''); setMoodMsg('✅ Mood logged!');
       fetchMood();
@@ -1014,7 +1022,7 @@ function App() {
   };
   const logCustomFood = async (cf) => {
     try {
-      await axios.post(`${API}/custom-foods/${cf.id}/log`, { mealType },
+      await axios.post(`${API}/custom-foods/${cf.id}/log`, { mealType, date: selectedDate },
         { headers: { Authorization: `Bearer ${token}` } });
       setMessage(`✅ ${cf.foodName} logged!`);
       fetchFoodLogs(selectedDate);
@@ -1164,7 +1172,7 @@ function App() {
 
         <div className="nav-section-label">Account</div>
         <div className={`nav-item ${activeTab === 'profile' ? 'active' : ''}`} onClick={() => setActiveTab('profile')}>
-          <i className="ti ti-user" aria-hidden="true"/>Profile
+          Profile
         </div>
 
         <div className="sidebar-bottom">
@@ -1206,7 +1214,10 @@ function App() {
               title="Smart reminders"
               style={{position:'relative'}}
             >
-              <i className="ti ti-bell" style={{fontSize:'16px', color: unreadCount > 0 ? '#5B4FD4' : '#8888A0'}} aria-hidden="true"/>
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={unreadCount > 0 ? '#5B4FD4' : '#8888A0'}
+                strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+              </svg>
               {unreadCount > 0 && (
                 <span style={{
                   position:'absolute', top:'4px', right:'4px',
@@ -2488,7 +2499,7 @@ function App() {
               <div className="progress-card">
                 <h3>💊 Today's Supplements</h3>
                 <p className="tab-sub-label">
-                  {supplementLogs.filter(s=>s.date===new Date().toISOString().split('T')[0]).length} taken today
+                  {supplementLogs.filter(s=>s.date===toLocalISO()).length} taken today
                 </p>
                 <div className="weight-list">
                   {supplementLogs.slice(0,20).map(s => (

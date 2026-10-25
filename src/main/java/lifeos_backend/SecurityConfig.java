@@ -9,7 +9,9 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
@@ -63,6 +65,16 @@ public class SecurityConfig {
             s.registerCorsConfiguration("/**", config);
             return s.getCorsConfiguration(source);
         };
+    }
+
+    /**
+     * Login is handled by our own JWT flow, not Spring's built-in user store.
+     * Declaring an empty store stops Spring Boot from generating a default
+     * "user" account and printing its password into the production logs.
+     */
+    @Bean
+    public UserDetailsService userDetailsService() {
+        return new InMemoryUserDetailsManager();
     }
 
     @Bean

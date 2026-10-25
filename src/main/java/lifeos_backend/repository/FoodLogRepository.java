@@ -12,6 +12,7 @@ import java.util.List;
 public interface FoodLogRepository extends JpaRepository<FoodLog, Long> {
     List<FoodLog> findByUserId(Long userId);
     List<FoodLog> findByUserIdAndDate(Long userId, LocalDate date);
+    List<FoodLog> findByUserIdAndDateBetweenOrderByDateAsc(Long userId, LocalDate start, LocalDate end);
 
     @Query("SELECT DISTINCT f.date FROM FoodLog f WHERE f.userId = :userId ORDER BY f.date DESC")
     List<LocalDate> findDistinctDatesByUserId(@Param("userId") Long userId);
