@@ -16,7 +16,6 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/workout-plans")
-@CrossOrigin(origins = "*")
 public class WorkoutPlanController {
 
     @Autowired private WorkoutPlanRepository workoutPlanRepository;
@@ -70,7 +69,15 @@ public class WorkoutPlanController {
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@RequestHeader("Authorization") String auth,
                                         @PathVariable Long id) {
-        workoutPlanRepository.deleteById(id);
-        return ResponseEntity.ok().build();
+        // Only delete the row if it belongs to the logged-in user; 404 otherwise
+        // (404, not 403, so other users' IDs aren't confirmed to exist).
+        Long userId = getUserId(auth);
+        return workoutPlanRepository.findById(id)
+                .filter(row -> userId.equals(row.getUserId()))
+                .map(row -> {
+                    workoutPlanRepository.delete(row);
+                    return ResponseEntity.ok().<Void>build();
+                })
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 }

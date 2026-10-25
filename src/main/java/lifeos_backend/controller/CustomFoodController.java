@@ -16,7 +16,6 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/custom-foods")
-@CrossOrigin(origins = "*")
 public class CustomFoodController {
 
     @Autowired private CustomFoodRepository customFoodRepository;
@@ -61,7 +60,10 @@ public class CustomFoodController {
                                                   @PathVariable Long id,
                                                   @RequestBody Map<String, String> body) {
         Long userId = getUserId(auth);
-        CustomFood cf = customFoodRepository.findById(id).orElseThrow();
+        CustomFood cf = customFoodRepository.findById(id)
+                .filter(row -> userId.equals(row.getUserId()))
+                .orElse(null);
+        if (cf == null) return ResponseEntity.notFound().build();
         FoodLog fl = new FoodLog();
         fl.setUserId(userId);
         fl.setFoodName(cf.getFoodName());
@@ -78,7 +80,15 @@ public class CustomFoodController {
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@RequestHeader("Authorization") String auth,
                                         @PathVariable Long id) {
-        customFoodRepository.deleteById(id);
-        return ResponseEntity.ok().build();
+        // Only delete the row if it belongs to the logged-in user; 404 otherwise
+        // (404, not 403, so other users' IDs aren't confirmed to exist).
+        Long userId = getUserId(auth);
+        return customFoodRepository.findById(id)
+                .filter(row -> userId.equals(row.getUserId()))
+                .map(row -> {
+                    customFoodRepository.delete(row);
+                    return ResponseEntity.ok().<Void>build();
+                })
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 }

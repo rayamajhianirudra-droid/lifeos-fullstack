@@ -1,5 +1,6 @@
 package lifeos_backend.model;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
@@ -18,6 +19,8 @@ public class User {
     private String email;
 
     @Column(nullable = false)
+    // Accepted on register, NEVER sent back in any JSON response.
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
     private String password;
 
     private int age;

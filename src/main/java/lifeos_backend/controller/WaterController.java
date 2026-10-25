@@ -16,7 +16,6 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/water")
-@CrossOrigin(origins = "*")
 public class WaterController {
 
     @Autowired private WaterRepository waterRepository;

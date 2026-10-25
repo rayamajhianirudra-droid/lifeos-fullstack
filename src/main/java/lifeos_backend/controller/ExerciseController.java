@@ -12,7 +12,6 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/exercise")
-@CrossOrigin(origins = "*")
 public class ExerciseController {
 
     private final ExerciseService exerciseService;
@@ -54,15 +53,15 @@ public class ExerciseController {
         );
     }
 
-    @GetMapping("/user/{userId}/date/{date}")
-    public List<ExerciseLog> getExercisesByUserAndDate(
-            @PathVariable Long userId,
-            @PathVariable String date) {
-        return exerciseService.getExercisesByUserAndDate(userId, LocalDate.parse(date));
-    }
+    // Removed GET /user/{userId}/date/{date}: it returned ANY user's workouts by id.
 
     @DeleteMapping("/{id}")
-    public void deleteExercise(@PathVariable Long id) {
-        exerciseService.deleteExercise(id);
+    public ResponseEntity<Void> deleteExercise(
+            @RequestHeader("Authorization") String authHeader,
+            @PathVariable Long id) {
+        Long userId = getUserIdFromToken(authHeader);
+        return exerciseService.deleteExerciseForUser(id, userId)
+                ? ResponseEntity.ok().build()
+                : ResponseEntity.notFound().build();
     }
 }

@@ -27,7 +27,11 @@ public class ExerciseService {
         return exerciseRepository.findByUserId(userId);
     }
 
-    public void deleteExercise(Long id) {
-        exerciseRepository.deleteById(id);
+    /** Deletes the log only if it belongs to userId. Returns false if not found / not owned. */
+    public boolean deleteExerciseForUser(Long id, Long userId) {
+        return exerciseRepository.findById(id)
+                .filter(row -> userId.equals(row.getUserId()))
+                .map(row -> { exerciseRepository.delete(row); return true; })
+                .orElse(false);
     }
 }

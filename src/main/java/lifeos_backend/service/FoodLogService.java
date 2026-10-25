@@ -57,7 +57,11 @@ public class FoodLogService {
         return foodLogRepository.findAll();
     }
 
-    public void deleteFoodLog(Long id) {
-        foodLogRepository.deleteById(id);
+    /** Deletes the log only if it belongs to userId. Returns false if not found / not owned. */
+    public boolean deleteFoodLogForUser(Long id, Long userId) {
+        return foodLogRepository.findById(id)
+                .filter(row -> userId.equals(row.getUserId()))
+                .map(row -> { foodLogRepository.delete(row); return true; })
+                .orElse(false);
     }
 }

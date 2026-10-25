@@ -14,7 +14,6 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/weight")
-@CrossOrigin(origins = "*")
 public class WeightController {
 
     @Autowired private WeightRepository weightRepository;
@@ -46,7 +45,15 @@ public class WeightController {
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@RequestHeader("Authorization") String auth,
                                         @PathVariable Long id) {
-        weightRepository.deleteById(id);
-        return ResponseEntity.ok().build();
+        // Only delete the row if it belongs to the logged-in user; 404 otherwise
+        // (404, not 403, so other users' IDs aren't confirmed to exist).
+        Long userId = getUserId(auth);
+        return weightRepository.findById(id)
+                .filter(row -> userId.equals(row.getUserId()))
+                .map(row -> {
+                    weightRepository.delete(row);
+                    return ResponseEntity.ok().<Void>build();
+                })
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 }

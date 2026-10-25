@@ -14,7 +14,6 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/mood")
-@CrossOrigin(origins = "*")
 public class MoodController {
 
     @Autowired private MoodRepository moodRepository;
@@ -49,7 +48,15 @@ public class MoodController {
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@RequestHeader("Authorization") String auth,
                                         @PathVariable Long id) {
-        moodRepository.deleteById(id);
-        return ResponseEntity.ok().build();
+        // Only delete the row if it belongs to the logged-in user; 404 otherwise
+        // (404, not 403, so other users' IDs aren't confirmed to exist).
+        Long userId = getUserId(auth);
+        return moodRepository.findById(id)
+                .filter(row -> userId.equals(row.getUserId()))
+                .map(row -> {
+                    moodRepository.delete(row);
+                    return ResponseEntity.ok().<Void>build();
+                })
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 }
