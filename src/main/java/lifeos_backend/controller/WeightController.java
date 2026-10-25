@@ -1,5 +1,6 @@
 package lifeos_backend.controller;
 
+import lifeos_backend.service.LogDates;
 import lifeos_backend.model.WeightLog;
 import lifeos_backend.repository.WeightRepository;
 import lifeos_backend.repository.UserRepository;
@@ -38,7 +39,7 @@ public class WeightController {
         w.setUserId(getUserId(auth));
         w.setWeightLbs(Double.parseDouble(body.get("weightLbs").toString()));
         w.setNotes((String) body.getOrDefault("notes", ""));
-        w.setDate(LocalDate.now());
+        w.setDate(LogDates.resolve(body.get("date")));
         return ResponseEntity.ok(weightRepository.save(w));
     }
 

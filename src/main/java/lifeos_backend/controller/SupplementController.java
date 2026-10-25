@@ -1,5 +1,6 @@
 package lifeos_backend.controller;
 
+import lifeos_backend.service.LogDates;
 import lifeos_backend.model.SupplementLog;
 import lifeos_backend.repository.SupplementRepository;
 import lifeos_backend.repository.UserRepository;
@@ -45,7 +46,7 @@ public class SupplementController {
         s.setDosage(body.get("dosage"));
         s.setUnit(body.getOrDefault("unit", "mg"));
         s.setTimeOfDay(body.getOrDefault("timeOfDay", "morning"));
-        s.setDate(LocalDate.now());
+        s.setDate(LogDates.resolve(body.get("date")));
         return ResponseEntity.ok(supplementRepository.save(s));
     }
 

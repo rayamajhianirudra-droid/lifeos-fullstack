@@ -1,5 +1,6 @@
 package lifeos_backend.controller;
 
+import lifeos_backend.service.LogDates;
 import lifeos_backend.model.WaterLog;
 import lifeos_backend.repository.WaterRepository;
 import lifeos_backend.repository.UserRepository;
@@ -62,8 +63,7 @@ public class WaterController {
         w.setUserId(getUserId(auth));
         w.setAmountOz(Double.parseDouble(body.get("amountOz").toString()));
         // Support optional date param (for logging on a specific date); defaults to today
-        String dateStr = body.containsKey("date") ? body.get("date").toString() : null;
-        w.setDate(dateStr != null && !dateStr.isBlank() ? LocalDate.parse(dateStr) : LocalDate.now());
+        w.setDate(LogDates.resolve(body.get("date")));
         return ResponseEntity.ok(waterRepository.save(w));
     }
 

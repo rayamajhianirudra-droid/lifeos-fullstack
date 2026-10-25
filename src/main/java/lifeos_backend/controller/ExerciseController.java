@@ -1,5 +1,6 @@
 package lifeos_backend.controller;
 
+import lifeos_backend.service.LogDates;
 import lifeos_backend.model.ExerciseLog;
 import lifeos_backend.model.User;
 import lifeos_backend.repository.UserRepository;
@@ -40,6 +41,8 @@ public class ExerciseController {
             @RequestBody ExerciseLog log) {
         Long userId = getUserIdFromToken(authHeader);
         log.setUserId(userId);
+        log.setId(null); // never let a client overwrite an existing row
+        log.setDate(LogDates.resolve(log.getDate()));
         return exerciseService.logExercise(log);
     }
 

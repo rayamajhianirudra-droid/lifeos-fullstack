@@ -7,5 +7,6 @@ import java.util.List;
 
 public interface ExerciseRepository extends JpaRepository<ExerciseLog, Long> {
     List<ExerciseLog> findByUserIdAndDate(Long userId, LocalDate date);
+    List<ExerciseLog> findByUserIdAndDateBetweenOrderByDateAsc(Long userId, LocalDate start, LocalDate end);
     List<ExerciseLog> findByUserId(Long userId);
 }

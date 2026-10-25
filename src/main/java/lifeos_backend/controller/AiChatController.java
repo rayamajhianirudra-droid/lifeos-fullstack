@@ -3,6 +3,9 @@ package lifeos_backend.controller;
 import lifeos_backend.model.User;
 import lifeos_backend.repository.UserRepository;
 import lifeos_backend.service.AiInsightService;
+import lifeos_backend.service.CoachContextService;
+import lifeos_backend.service.LogDates;
+import org.springframework.http.HttpStatus;
 import lifeos_backend.service.JwtService;
 import lifeos_backend.service.RateLimiter;
 import java.time.Duration;
@@ -20,21 +23,23 @@ public class AiChatController {
     private final JwtService jwtService;
     private final UserRepository userRepository;
     private final RateLimiter rateLimiter;
+    private final CoachContextService coachContextService;
 
     // Protects the Gemini quota/bill: one account can't burn it for everyone.
     private static final int MAX_CHATS_PER_HOUR = 40;
     private static final int MAX_MESSAGE_CHARS = 2000;
-    private static final int MAX_CONTEXT_CHARS = 4000;
     private static final int MAX_HISTORY_TURNS = 20;
 
     public AiChatController(AiInsightService aiInsightService,
                             JwtService jwtService,
                             UserRepository userRepository,
-                            RateLimiter rateLimiter) {
+                            RateLimiter rateLimiter,
+                            CoachContextService coachContextService) {
         this.aiInsightService = aiInsightService;
         this.jwtService = jwtService;
         this.userRepository = userRepository;
         this.rateLimiter = rateLimiter;
+        this.coachContextService = coachContextService;
     }
 
     private Long getUserIdFromToken(String authHeader) {
@@ -47,7 +52,12 @@ public class AiChatController {
 
     public static class ChatRequest {
         public String message;
+        /** Ignored since the server builds context itself; kept so older app versions don't break. */
         public String context;
+        /** The user's local date (YYYY-MM-DD) the coach should treat as "today". */
+        public String date;
+        /** Profile settings that currently live in the browser (age, goals, water). Range-checked server-side. */
+        public Map<String, Object> profile;
         public List<Map<String, String>> history;
     }
 
@@ -72,11 +82,18 @@ public class AiChatController {
                     "You've reached the AI Coach limit for this hour. Take a breather and try again soon!"));
         }
 
+        // Context comes from the database (plus range-checked profile settings), never trusted from the client.
+        String context = coachContextService.build(userId, LogDates.resolve(request.date), request.profile);
+
         String reply = aiInsightService.getChatResponse(
                 truncate(request.message, MAX_MESSAGE_CHARS),
-                truncate(request.context, MAX_CONTEXT_CHARS),
+                context,
                 cleanHistory(request.history)
         );
+        if (reply == null) {
+            // Gemini unavailable: the app shows its built-in coach instead of an error-shaped reply.
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(new ChatResponse(null));
+        }
         return ResponseEntity.ok(new ChatResponse(reply));
     }
 

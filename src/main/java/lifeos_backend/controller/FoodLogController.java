@@ -1,5 +1,6 @@
 package lifeos_backend.controller;
 
+import lifeos_backend.service.LogDates;
 import lifeos_backend.model.FoodLog;
 import lifeos_backend.model.User;
 import lifeos_backend.repository.UserRepository;
@@ -41,6 +42,8 @@ public class FoodLogController {
             @RequestBody FoodLog foodLog) {
         Long userId = getUserIdFromToken(authHeader);
         foodLog.setUserId(userId);
+        foodLog.setId(null); // never let a client overwrite an existing row
+        foodLog.setDate(LogDates.resolve(foodLog.getDate()));
         return ResponseEntity.ok(foodLogService.addFoodLog(foodLog));
     }
 

@@ -1,5 +1,6 @@
 package lifeos_backend.controller;
 
+import lifeos_backend.service.LogDates;
 import lifeos_backend.model.MoodLog;
 import lifeos_backend.repository.MoodRepository;
 import lifeos_backend.repository.UserRepository;
@@ -41,7 +42,7 @@ public class MoodController {
         m.setEnergyLevel((String) body.getOrDefault("energyLevel", "medium"));
         m.setStressLevel((String) body.getOrDefault("stressLevel", "low"));
         m.setNotes((String) body.getOrDefault("notes", ""));
-        m.setDate(LocalDate.now());
+        m.setDate(LogDates.resolve(body.get("date")));
         return ResponseEntity.ok(moodRepository.save(m));
     }
 
