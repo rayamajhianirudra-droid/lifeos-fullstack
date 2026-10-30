@@ -34,6 +34,6 @@ USER lifeos
 # Override with JAVA_TOOL_OPTIONS on a larger plan.
 ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=55 -XX:+UseSerialGC -Xss512k -XX:MaxMetaspaceSize=150m -XX:ReservedCodeCacheSize=48m -XX:+ExitOnOutOfMemoryError"
 
-# The platform injects PORT; application.properties reads ${PORT:8080}.
+# The app listens on 8080 (render.yaml sets PORT=8080 so Render routes there).
 EXPOSE 8080
 ENTRYPOINT ["java", "-jar", "/app/app.jar"]

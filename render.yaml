@@ -23,6 +23,9 @@ services:
         - Dockerfile
         - .dockerignore
     envVars:
+      # Tells Render which port to route to; the app listens on 8080.
+      - key: PORT
+        value: "8080"
       # Render passes Cloudflare's True-Client-IP; see RateLimiter.clientIp.
       - key: CLIENT_IP_HEADER
         value: True-Client-IP
