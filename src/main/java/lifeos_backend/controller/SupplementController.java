@@ -1,5 +1,7 @@
 package lifeos_backend.controller;
 
+import lifeos_backend.service.Inputs;
+import java.util.Set;
 import lifeos_backend.service.LogDates;
 import lifeos_backend.model.SupplementLog;
 import lifeos_backend.repository.SupplementRepository;
@@ -40,12 +42,16 @@ public class SupplementController {
     @PostMapping
     public ResponseEntity<SupplementLog> log(@RequestHeader("Authorization") String auth,
                                               @RequestBody Map<String, String> body) {
+        // The app sends "supplementName" (older clients sent "name"); the server used to read
+        // only "name", so every supplement was saved with a blank name.
+        String name = Inputs.text(body.containsKey("supplementName") ? body.get("supplementName") : body.get("name"), 80);
+        if (name.isEmpty()) return ResponseEntity.badRequest().build();
         SupplementLog s = new SupplementLog();
         s.setUserId(getUserId(auth));
-        s.setSupplementName(body.get("name"));
-        s.setDosage(body.get("dosage"));
-        s.setUnit(body.getOrDefault("unit", "mg"));
-        s.setTimeOfDay(body.getOrDefault("timeOfDay", "morning"));
+        s.setSupplementName(name);
+        s.setDosage(Inputs.text(body.get("dosage"), 20));
+        s.setUnit(Inputs.oneOf(body.get("unit"), Set.of("mg", "mcg", "g", "iu", "ml", "capsule", "tablet", "scoop"), "mg"));
+        s.setTimeOfDay(Inputs.oneOf(body.get("timeOfDay"), Set.of("morning", "afternoon", "evening", "night", "with meal"), "morning"));
         s.setDate(LogDates.resolve(body.get("date")));
         return ResponseEntity.ok(supplementRepository.save(s));
     }

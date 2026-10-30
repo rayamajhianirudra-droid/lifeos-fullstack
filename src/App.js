@@ -1,16 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, ReferenceLine } from 'recharts';
 import './App.css';
 
 const API = process.env.REACT_APP_API_URL || 'http://localhost:8080/api';
-const USDA_KEY = process.env.REACT_APP_USDA_KEY || '';
 
 // Calendar dates in the user's LOCAL time zone (YYYY-MM-DD).
 // Using UTC here made the app's "day" end at 7 pm in Chicago.
 const toLocalISO = (d = new Date()) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 const parseLocalISO = (s) => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
+// "2026-10-27" -> "Oct 27". new Date("2026-10-27") is UTC midnight, which showed the
+// PREVIOUS day everywhere in the US; parse it as a local calendar date instead.
+const shortDate = (iso) => iso ? parseLocalISO(String(iso).slice(0, 10)).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
 
 // ─────────────────────────────────────────────────────────────
 // LifeOS 3.0 dashboard visuals (module-level, no extra deps)
@@ -138,19 +140,20 @@ function App() {
   const [authPassword, setAuthPassword] = useState('');
   const [authName, setAuthName] = useState('');
   const [authMessage, setAuthMessage] = useState('');
+  // Sign-up is two steps: account details, then "about you" (needed for accurate goals).
+  const [regStep, setRegStep] = useState(1);
   const [foodLogs, setFoodLogs] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [searching, setSearching] = useState(false);
+  // Portion picker for a chosen search result: { food, portionIdx, qty }
+  const [picked, setPicked] = useState(null);
   const [message, setMessage] = useState('');
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [water, setWater] = useState(() => {
-    const today = toLocalISO();
-    try {
-      const saved = JSON.parse(localStorage.getItem('waterLog') || '{}');
-      return saved.date === today ? (saved.count || 0) : 0;
-    } catch { return 0; }
-  });
+  // Water is saved to the account (one 8 oz entry per glass) for the selected day.
+  const [water, setWater] = useState(0);
+  const [waterLogs, setWaterLogs] = useState([]);
+  const [waterBusy, setWaterBusy] = useState(false);
   const [mealType, setMealType] = useState('breakfast');
   const [resetToken, setResetToken] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -169,7 +172,6 @@ function App() {
   const [exerciseDuration, setExerciseDuration] = useState('');
   const [exerciseCategory, setExerciseCategory] = useState('cardio');
   const [totalBurned, setTotalBurned] = useState(0);
-  const [weeklyData, setWeeklyData] = useState([]);
   const [dailyHistory, setDailyHistory] = useState([]);
   const [aiMessage, setAiMessage] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
@@ -223,7 +225,7 @@ function App() {
 
   // --- Notifications ---
   const [showNotifDropdown, setShowNotifDropdown] = useState(false);
-  const [chartRange, setChartRange] = useState('7d');
+  const [chartRange, setChartRange] = useState('7D');
 
   // If the server rejects our saved login (expired, or the signing key was rotated),
   // clear it and show the sign-in screen instead of a dashboard where every request
@@ -260,7 +262,9 @@ function App() {
     let tdee = bmr * (activityMultipliers[p.activity] || 1.55);
     if (p.goal === 'lose') tdee -= 500;
     if (p.goal === 'gain') tdee += 500;
-    return Math.round(tdee);
+    // Never set a target below commonly recommended minimums without medical supervision.
+    const floor = p.sex === 'female' ? 1200 : 1500;
+    return Math.round(Math.max(tdee, floor));
   };
 
   const dailyGoal = calculateDailyGoal(profile);
@@ -273,8 +277,9 @@ function App() {
       fetchWeightLogs();
       fetchBodyFatLogs();
       fetchExerciseLogs(selectedDate);
-      fetchWeeklyData();
       fetchDailyHistory();
+      fetchWater(selectedDate);
+      fetchProfile();
     }
   }, [token]); // eslint-disable-line
 
@@ -287,13 +292,6 @@ function App() {
     localStorage.setItem('darkMode', darkMode);
   }, [darkMode]);
 
-  // Persist water intake daily — resets automatically at midnight via date key
-  useEffect(() => {
-    const today = toLocalISO();
-    try {
-      localStorage.setItem('waterLog', JSON.stringify({ date: today, count: water }));
-    } catch { /* storage full or blocked */ }
-  }, [water]);
 
   // Helper: extract user ID from the JWT token payload
   const getUserIdFromToken = (jwt) => {
@@ -312,9 +310,10 @@ function App() {
 
     const subscribeToPush = async () => {
       if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
-
-      const permission = await Notification.requestPermission();
-      if (permission !== 'granted') return;
+      // Never prompt on login: browsers penalize unprompted permission requests and users
+      // deny them. We only subscribe once the user has turned reminders on themselves.
+      if (Notification.permission !== 'granted') return;
+      if (!process.env.REACT_APP_VAPID_KEY) return;
 
       const userId = getUserIdFromToken(token);
       if (!userId) {
@@ -351,37 +350,33 @@ function App() {
   useEffect(() => {
     if (!token) return;
 
-    const requestNotificationPermission = async () => {
-      if ('Notification' in window && Notification.permission === 'default') {
-        await Notification.requestPermission();
-      }
+    if (!('Notification' in window)) return;
+
+    // At most one reminder per meal per day (this used to repeat every 30 minutes and on
+    // every food log during the reminder hour).
+    const notifyOnce = (key, title, body) => {
+      const k = `lifeos-reminded-${toLocalISO()}-${key}`;
+      try { if (localStorage.getItem(k)) return; localStorage.setItem(k, '1'); } catch { /* ignore */ }
+      new Notification(title, { body, icon: '/favicon.ico' });
     };
-    requestNotificationPermission();
 
     const checkAndNotify = () => {
       if (Notification.permission !== 'granted') return;
+      if (selectedDate !== toLocalISO()) return;   // only judge today's logs
       const hour = new Date().getHours();
       const hasBreakfast = foodLogs.some(f => f.mealType === 'breakfast');
       const hasLunch = foodLogs.some(f => f.mealType === 'lunch');
       const hasDinner = foodLogs.some(f => f.mealType === 'dinner');
 
-      if (hour === 8 && !hasBreakfast) {
-        new Notification('🌅 LifeOS — Breakfast time!', {
-          body: `Good morning ${currentUser}! Don't forget to log your breakfast.`,
-          icon: '/favicon.ico'
-        });
+      const first = currentUser?.split(' ')[0] || 'there';
+      if (hour >= 8 && hour < 10 && !hasBreakfast) {
+        notifyOnce('breakfast', '🌅 LifeOS: breakfast time', `Good morning ${first}! Don't forget to log your breakfast.`);
       }
-      if (hour === 12 && !hasLunch) {
-        new Notification('☀️ LifeOS — Lunch time!', {
-          body: `Hey ${currentUser}! Log your lunch to stay on track.`,
-          icon: '/favicon.ico'
-        });
+      if (hour >= 12 && hour < 14 && !hasLunch) {
+        notifyOnce('lunch', '☀️ LifeOS: lunch time', `Hey ${first}! Log your lunch to stay on track.`);
       }
-      if (hour === 18 && !hasDinner) {
-        new Notification('🌙 LifeOS — Dinner time!', {
-          body: `${currentUser}, don't forget to log dinner. Keep your streak alive! 🔥`,
-          icon: '/favicon.ico'
-        });
+      if (hour >= 18 && hour < 20 && !hasDinner) {
+        notifyOnce('dinner', '🌙 LifeOS: dinner time', `${first}, don't forget to log dinner. Keep your streak alive! 🔥`);
       }
     };
 
@@ -401,7 +396,7 @@ function App() {
 
   const fetchStreak = async () => {
     try {
-      const res = await axios.get(`${API}/foodlogs/streak`, {
+      const res = await axios.get(`${API}/foodlogs/streak?date=${toLocalISO()}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setStreak(res.data.streak);
@@ -437,18 +432,9 @@ function App() {
     } catch (err) { console.log(err); }
   };
 
-  const fetchWeeklyData = async () => {
-    try {
-      const res = await axios.get(`${API}/foodlogs/weekly`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      setWeeklyData(res.data);
-    } catch (err) { console.log(err); }
-  };
-
   const fetchDailyHistory = async () => {
     try {
-      const res = await axios.get(`${API}/foodlogs/history?days=30`, {
+      const res = await axios.get(`${API}/foodlogs/history?days=90&end=${toLocalISO()}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setDailyHistory(res.data);
@@ -463,7 +449,8 @@ function App() {
       }, { headers: { Authorization: `Bearer ${token}` } });
       setWeightLbs('');
       fetchWeightLogs();
-    } catch (err) { console.log(err); }
+      fetchProfile();   // the server updates the profile weight, which drives your goals
+    } catch (err) { setMessage('❌ Enter a weight between 50 and 1000 lbs.'); }
   };
 
   const deleteWeight = async (id) => {
@@ -475,8 +462,13 @@ function App() {
     } catch (err) { console.log(err); }
   };
 
+  const [bodyFatError, setBodyFatError] = useState('');
   const logBodyFat = async () => {
-    if (!waistInches || !neckInches || (profile.sex === 'female' && !hipInches)) return;
+    setBodyFatError('');
+    if (!waistInches || !neckInches || (profile.sex === 'female' && !hipInches)) {
+      setBodyFatError(profile.sex === 'female' ? 'Enter waist, neck and hip measurements.' : 'Enter waist and neck measurements.');
+      return;
+    }
     try {
       await axios.post(`${API}/bodyfat`, {
         sex: profile.sex,
@@ -484,10 +476,13 @@ function App() {
         waistInches: parseFloat(waistInches),
         neckInches: parseFloat(neckInches),
         hipInches: profile.sex === 'female' ? parseFloat(hipInches) : null,
+        date: toLocalISO(),
       }, { headers: { Authorization: `Bearer ${token}` } });
       setWaistInches(''); setNeckInches(''); setHipInches('');
       fetchBodyFatLogs();
-    } catch (err) { console.log(err); }
+    } catch (err) {
+      setBodyFatError(err.response?.data?.error || 'Could not calculate body fat. Check your measurements.');
+    }
   };
 
   const deleteBodyFat = async (id) => {
@@ -628,6 +623,54 @@ function App() {
     return `${totalCalories} of ${dailyGoal} calories today — ${pct}% there. Protein at ${totalProtein}g/${proteinGoal}g. ${streak > 0 ? `${streak} day streak.` : ''} ${pct > 80 ? 'Strong day.' : 'Keep pushing.'}`;
   };
 
+  const fetchWater = async (date) => {
+    if (!token) return;
+    try {
+      const res = await axios.get(`${API}/water?date=${date}`, { headers: { Authorization: `Bearer ${token}` } });
+      const logs = res.data || [];
+      let count = Math.round(logs.reduce((sum, w) => sum + (w.amountOz || 0), 0) / 8);
+      // One-time move of a count that older versions kept only in this browser.
+      try {
+        const legacy = JSON.parse(localStorage.getItem('waterLog') || 'null');
+        localStorage.removeItem('waterLog');
+        if (legacy && legacy.date === date && count === 0 && legacy.count > 0) {
+          const n = Math.min(legacy.count, 20);
+          for (let i = 0; i < n; i++) {
+            await axios.post(`${API}/water`, { amountOz: 8, date }, { headers: { Authorization: `Bearer ${token}` } });
+          }
+          return fetchWater(date);
+        }
+      } catch { /* storage blocked: nothing to migrate */ }
+      setWaterLogs(logs);
+      setWater(count);
+    } catch (e) { /* keep showing the last known value */ }
+  };
+
+  // Accepts a number or an updater function, like setState. Saves to the server.
+  const updateWater = async (next) => {
+    if (waterBusy) return;
+    const target = Math.max(0, Math.min(typeof next === 'function' ? next(water) : next, 20));
+    if (target === water) return;
+    const headers = { Authorization: `Bearer ${token}` };
+    const before = water;
+    setWater(target);          // instant feedback
+    setWaterBusy(true);
+    try {
+      if (target > before) {
+        for (let i = before; i < target; i++) {
+          await axios.post(`${API}/water`, { amountOz: 8, date: selectedDate }, { headers });
+        }
+      } else {
+        const newestFirst = [...waterLogs].sort((a, b) => b.id - a.id).slice(0, before - target);
+        for (const w of newestFirst) await axios.delete(`${API}/water/${w.id}`, { headers });
+      }
+    } catch (e) {
+      setMessage('❌ Could not save water. Check your connection.');
+    }
+    await fetchWater(selectedDate);
+    setWaterBusy(false);
+  };
+
   const changeDate = (direction) => {
     const current = parseLocalISO(selectedDate);
     current.setDate(current.getDate() + direction);
@@ -635,6 +678,7 @@ function App() {
     setSelectedDate(newDate);
     fetchFoodLogs(newDate);
     fetchExerciseLogs(newDate);
+    fetchWater(newDate);
   };
 
   const goToToday = () => {
@@ -642,6 +686,7 @@ function App() {
     setSelectedDate(today);
     fetchFoodLogs(today);
     fetchExerciseLogs(today);
+    fetchWater(today);
   };
 
   const formatDateLabel = (dateStr) => {
@@ -652,18 +697,33 @@ function App() {
     return parseLocalISO(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   };
 
+  const continueRegistration = () => {
+    setAuthMessage('');
+    if (!authName.trim()) return setAuthMessage('❌ Please enter your name.');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(authEmail.trim())) return setAuthMessage('❌ Please enter a valid email address.');
+    if (authPassword.length < 8) return setAuthMessage('❌ Password must be at least 8 characters.');
+    setRegStep(2);
+  };
+
   const handleAuth = async () => {
+    if (authMode === 'register' && regStep === 1) return continueRegistration();
     try {
       const url = authMode === 'login' ? `${API}/auth/login` : `${API}/auth/register`;
       const body = authMode === 'login'
-        ? { email: authEmail, password: authPassword }
-        : { name: authName, email: authEmail, password: authPassword,
+        ? { email: authEmail.trim(), password: authPassword }
+        : { name: authName.trim(), email: authEmail.trim(), password: authPassword,
             age: profile.age, weightLbs: profile.weightLbs,
             heightFeet: profile.heightFeet, heightInches: profile.heightInches,
             goal: profile.goal, activity: profile.activity, sex: profile.sex };
       const res = await axios.post(url, body);
       localStorage.setItem('token', res.data.token);
       localStorage.setItem('userName', res.data.name);
+      if (authMode === 'register') {
+        try { localStorage.setItem('profile', JSON.stringify(profile)); } catch { /* ignore */ }
+        setRegStep(1);
+      }
+      // Don't keep the password in memory, and next time show "Sign in", not "Sign up".
+      setAuthPassword(''); setAuthMessage(''); setAuthMode('login');
       setToken(res.data.token);
       setCurrentUser(res.data.name);
     } catch (err) {
@@ -701,35 +761,79 @@ function App() {
   const logout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('userName');
+    localStorage.removeItem('profile');   // personal data shouldn't stay on a shared computer
+    setAuthMode('login'); setAuthPassword(''); setActiveTab('dashboard');
+    setWater(0); setWaterLogs([]); setDailyHistory([]); setBodyFatLogs([]);
+    setSleepLogs([]); setMoodLogs([]); setSupplementLogs([]); setCustomFoods([]);
     setToken(null); setCurrentUser(null);
     setFoodLogs([]); setStreak(0); setWeightLogs([]);
-    setExerciseLogs([]); setTotalBurned(0); setWeeklyData([]);
+    setExerciseLogs([]); setTotalBurned(0);
     setChatHistory([]);
   };
 
-  const saveProfile = () => {
-    localStorage.setItem('profile', JSON.stringify(profile));
-    setProfileSaved(true);
-    setTimeout(() => setProfileSaved(false), 2000);
+  // Profile is saved to the account so it survives cleared browsers and other devices.
+  const fetchProfile = async () => {
+    try {
+      const res = await axios.get(`${API}/profile`, { headers: { Authorization: `Bearer ${token}` } });
+      const p = res.data;
+      if (p && p.age && p.weightLbs && p.heightFeet && p.sex && p.goal && p.activity) {
+        const next = { age: p.age, weightLbs: p.weightLbs, heightFeet: p.heightFeet, heightInches: p.heightInches,
+          sex: p.sex, activity: p.activity, goal: p.goal };
+        setProfile(next);
+        try { localStorage.setItem('profile', JSON.stringify(next)); } catch { /* ignore */ }
+      }
+    } catch (e) { /* offline: keep the cached profile */ }
   };
 
-  const searchFood = async () => {
-    if (!searchQuery.trim()) return;
-    setSearching(true); setSearchResults([]);
+  const [profileError, setProfileError] = useState('');
+  const [notifPermission, setNotifPermission] = useState(
+    typeof window !== 'undefined' && 'Notification' in window ? Notification.permission : 'unsupported');
+  const enableReminders = async () => {
+    if (!('Notification' in window)) return;
+    const result = await Notification.requestPermission();
+    setNotifPermission(result);
+  };
+  const saveProfile = async () => {
+    setProfileError('');
     try {
-      const res = await axios.get(
-        `https://api.nal.usda.gov/fdc/v1/foods/search?query=${searchQuery}&pageSize=6&api_key=${USDA_KEY}`
-      );
-      const foods = res.data.foods.map(f => ({
-        name: f.description,
-        calories: Math.round(f.foodNutrients?.find(n => n.nutrientName === 'Energy')?.value || 0),
-        protein: Math.round((f.foodNutrients?.find(n => n.nutrientName === 'Protein')?.value || 0) * 10) / 10,
-        carbs: Math.round((f.foodNutrients?.find(n => n.nutrientName === 'Carbohydrate, by difference')?.value || 0) * 10) / 10,
-        fat: Math.round((f.foodNutrients?.find(n => n.nutrientName === 'Total lipid (fat)')?.value || 0) * 10) / 10,
-      }));
-      setSearchResults(foods);
-    } catch (err) { setMessage('❌ Food search failed.'); }
+      await axios.put(`${API}/profile`, profile, { headers: { Authorization: `Bearer ${token}` } });
+      try { localStorage.setItem('profile', JSON.stringify(profile)); } catch { /* ignore */ }
+      setProfileSaved(true);
+      setTimeout(() => setProfileSaved(false), 2000);
+    } catch (err) {
+      setProfileError(err.response?.data?.error || 'Could not save your profile. Check your connection and try again.');
+    }
+  };
+
+  // Food search goes through our server: it keeps the USDA key secret, reads the right
+  // (kcal) energy value and returns real portions. Values come back per 100 g.
+  const searchFood = async () => {
+    const q = searchQuery.trim();
+    if (!q || searching) return;
+    setSearching(true); setSearchResults([]); setPicked(null); setMessage('');
+    try {
+      const res = await axios.get(`${API}/foods/search`, {
+        params: { q }, headers: { Authorization: `Bearer ${token}` }
+      });
+      setSearchResults(res.data);
+      if (res.data.length === 0) setMessage(`No foods found for "${q}". Try a simpler name, or create a custom food below.`);
+    } catch (err) {
+      const status = err.response?.status;
+      setMessage(status === 429 ? '⏳ Too many searches. Wait a minute and try again.'
+        : '❌ Food search is unavailable right now. You can still log a custom food below.');
+    }
     setSearching(false);
+  };
+
+  // Macros for `qty` x portion of a food whose values are per 100 g.
+  const portionMacros = (food, portion, qty) => {
+    const factor = (portion.grams * qty) / 100;
+    const r1 = v => Math.round(v * factor * 10) / 10;
+    return {
+      calories: Math.round(food.per100g.calories * factor),
+      protein: r1(food.per100g.protein), carbs: r1(food.per100g.carbs), fat: r1(food.per100g.fat),
+      grams: Math.round(portion.grams * qty * 10) / 10,
+    };
   };
 
   const logFood = async (food) => {
@@ -737,11 +841,12 @@ function App() {
       await axios.post(`${API}/foodlogs`, {
         foodName: food.name, calories: food.calories,
         protein: food.protein, carbs: food.carbs, fat: food.fat,
-        mealType: mealType, date: selectedDate
+        mealType: mealType, date: selectedDate,
+        fdcId: food.fdcId, servingLabel: food.servingLabel, quantity: food.quantity, grams: food.grams,
       }, { headers: { Authorization: `Bearer ${token}` } });
-      setMessage('✅ ' + food.name.substring(0, 30) + ' logged!');
-      setSearchQuery(''); setSearchResults([]);
-      fetchFoodLogs(selectedDate); fetchStreak(); fetchWeeklyData(); fetchDailyHistory();
+      setMessage('✅ ' + food.name.substring(0, 40) + ' logged!');
+      setSearchQuery(''); setSearchResults([]); setPicked(null);
+      fetchFoodLogs(selectedDate); fetchStreak(); fetchDailyHistory();
       setTimeout(() => fetchFoodLogs(selectedDate), 4000);
       setTimeout(() => setMessage(''), 3000);
 
@@ -765,19 +870,22 @@ function App() {
       await axios.delete(`${API}/foodlogs/${id}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      fetchFoodLogs(selectedDate); fetchStreak(); fetchWeeklyData(); fetchDailyHistory();
+      fetchFoodLogs(selectedDate); fetchStreak(); fetchDailyHistory();
     } catch (err) { setMessage('❌ Error deleting food.'); }
   };
 
-  const totalCalories = foodLogs.reduce((sum, f) => sum + f.calories, 0);
+  const totalCalories = Math.round(foodLogs.reduce((sum, f) => sum + f.calories, 0));
   const totalProtein = Math.round(foodLogs.reduce((sum, f) => sum + f.protein, 0) * 10) / 10;
   const totalCarbs = Math.round(foodLogs.reduce((sum, f) => sum + f.carbs, 0) * 10) / 10;
   const totalFat = Math.round(foodLogs.reduce((sum, f) => sum + f.fat, 0) * 10) / 10;
   const caloriePercent = Math.min((totalCalories / dailyGoal) * 100, 100);
   const remaining = Math.max(dailyGoal - totalCalories + totalBurned, 0);
-  const proteinGoal = Math.round(dailyGoal * 0.3 / 4);
-  const carbsGoal = Math.round(dailyGoal * 0.45 / 4);
-  const fatGoal = Math.round(dailyGoal * 0.25 / 9);
+  // Protein from body weight (about 0.7-0.8 g per lb), not a % of calories, which gave
+  // unrealistic targets like 205 g. Fat about 28% of calories; carbs take the rest.
+  const proteinPerLb = profile.goal === 'maintain' ? 0.7 : 0.8;
+  const proteinGoal = Math.round(Math.min(Math.max(profile.weightLbs * proteinPerLb, 50), 220));
+  const fatGoal = Math.round(dailyGoal * 0.28 / 9);
+  const carbsGoal = Math.max(Math.round((dailyGoal - proteinGoal * 4 - fatGoal * 9) / 4), 50);
   const circumference = 2 * Math.PI * 54;
   const strokeDash = circumference - (caloriePercent / 100) * circumference;
 
@@ -867,42 +975,73 @@ function App() {
 
   const bmi = profile.weightLbs && profile.heightFeet ?
     ((profile.weightLbs / ((profile.heightFeet * 12 + profile.heightInches) ** 2)) * 703).toFixed(1) : null;
+  // Color the BMI by category (it used to be green even for "Obese").
+  const bmiTone = !bmi ? { color: '#9898AA', bg: 'transparent' }
+    : bmi < 18.5 ? { color: '#E8820C', bg: '#FEF4E8' }
+    : bmi < 25 ? { color: '#1D9E75', bg: '#EDFAF5' }
+    : bmi < 30 ? { color: '#E8820C', bg: '#FEF4E8' }
+    : { color: '#D85A30', bg: '#FEF4EE' };
   const bmiLabel = bmi ? (bmi < 18.5 ? 'Underweight' : bmi < 25 ? 'Normal' : bmi < 30 ? 'Overweight' : 'Obese') : null;
 
   const estimatedBurn = exerciseDuration
     ? Math.round((MET_VALUES[exerciseCategory] || 6) * (profile.weightLbs * 0.453592) * parseInt(exerciseDuration || 0) / 60)
     : 0;
 
-  let healthScore = 50;
-  if (totalCalories > 0) healthScore += 10;
-  if (totalCalories <= dailyGoal) healthScore += 10;
-  if (totalProtein >= proteinGoal) healthScore += 10;
-  if (water >= 8) healthScore += 10;
-  if (streak >= 3) healthScore += 5;
-  if (streak >= 7) healthScore += 5;
-  if (totalBurned > 0) healthScore += 5;
-  if (bmi && parseFloat(bmi) >= 18.5 && parseFloat(bmi) < 25) healthScore += 5;
-  healthScore = Math.min(healthScore, 100);
+  // Health score (0-100) from the selected day's real habits. An empty day scores near 0.
+  //   Nutrition 40 (calories vs goal 25, protein vs goal 15) - only if food is logged
+  //   Activity 20 · Hydration 15 · Sleep 15 (7-9 h best) · Consistency 10 (streak)
+  const scoreSleep = sleepLogs.find(sl => String(sl.date).slice(0, 10) === selectedDate);
+  const scoreParts = (() => {
+    let nutrition = 0;
+    if (totalCalories > 0) {
+      const ratio = totalCalories / dailyGoal;
+      nutrition += ratio >= 0.85 && ratio <= 1.1 ? 25 : ratio >= 0.7 && ratio <= 1.2 ? 15 : 5;
+      const pr = totalProtein / proteinGoal;
+      nutrition += pr >= 0.9 ? 15 : pr >= 0.6 ? 8 : pr > 0 ? 3 : 0;
+    }
+    const minutes = exerciseLogs.reduce((m, e) => m + (e.durationMinutes || 0), 0);
+    const activity = totalBurned >= 300 || minutes >= 30 ? 20 : exerciseLogs.length > 0 ? 10 : 0;
+    const hydration = Math.round(Math.min(water, 8) / 8 * 15);
+    const hrs = scoreSleep?.hoursSlept;
+    const sleep = hrs == null ? 0 : hrs >= 7 && hrs <= 9 ? 15 : (hrs >= 6 && hrs < 7) || (hrs > 9 && hrs <= 10) ? 8 : 3;
+    const consistency = streak >= 7 ? 10 : streak >= 3 ? 6 : streak >= 1 ? 3 : 0;
+    return { nutrition, activity, hydration, sleep, consistency };
+  })();
+  const healthScore = Math.min(100,
+    scoreParts.nutrition + scoreParts.activity + scoreParts.hydration + scoreParts.sleep + scoreParts.consistency);
+  const healthScoreTitle = `Health Score ${healthScore}/100. Nutrition ${scoreParts.nutrition}/40, activity ${scoreParts.activity}/20, hydration ${scoreParts.hydration}/15, sleep ${scoreParts.sleep}/15, consistency ${scoreParts.consistency}/10`;
   const healthLabel = healthScore >= 80 ? 'Excellent' : healthScore >= 60 ? 'Good' : healthScore >= 40 ? 'Fair' : 'Needs Work';
 
+  // Achievements that history can prove stay unlocked (based on the last 90 days), instead of
+  // re-locking whenever you look at a day where you didn't do it.
+  const loggedHistory = dailyHistory.filter(d => d.calories != null);
+  const everCalorieGoal = loggedHistory.some(d => d.calories >= dailyGoal * 0.9 && d.calories <= dailyGoal * 1.05);
+  const everProteinGoal = loggedHistory.some(d => d.protein >= proteinGoal);
+  const everFiveFoods = loggedHistory.some(d => d.items >= 5);
+  const everAllMeals = loggedHistory.some(d => d.meals >= 4);
   const achievements = [
-    { id: 'first_food', icon: '🌱', title: 'First Step', desc: 'Logged your first food', unlocked: foodLogs.length > 0 || weightLogs.length > 0 || exerciseLogs.length > 0, color: '#1D9E75', bg: '#EDFAF5', border: '#BAF0D8' },
+    { id: 'first_food', icon: '🌱', title: 'First Step', desc: 'Logged your first food', unlocked: loggedHistory.length > 0 || foodLogs.length > 0 || weightLogs.length > 0 || exerciseLogs.length > 0, color: '#1D9E75', bg: '#EDFAF5', border: '#BAF0D8' },
     { id: 'streak_3', icon: '🔥', title: 'On Fire', desc: '3 day logging streak', unlocked: streak >= 3, color: '#E8820C', bg: '#FEF4E8', border: '#F5D4A8' },
     { id: 'streak_7', icon: '⭐', title: 'Week Warrior', desc: '7 day logging streak', unlocked: streak >= 7, color: '#5B4FD4', bg: '#F0EFFD', border: '#DDD8FF' },
     { id: 'streak_30', icon: '💎', title: 'Monthly Master', desc: '30 day logging streak', unlocked: streak >= 30, color: '#5B4FD4', bg: '#F0EFFD', border: '#DDD8FF' },
-    { id: 'calorie_goal', icon: '🎯', title: 'On Target', desc: 'Hit your calorie goal today', unlocked: totalCalories > 0 && totalCalories <= dailyGoal && totalCalories >= dailyGoal * 0.9, color: '#1D9E75', bg: '#EDFAF5', border: '#BAF0D8' },
-    { id: 'protein_goal', icon: '💪', title: 'Protein King', desc: 'Hit your protein goal today', unlocked: totalProtein >= proteinGoal, color: '#5B4FD4', bg: '#F0EFFD', border: '#DDD8FF' },
+    { id: 'calorie_goal', icon: '🎯', title: 'On Target', desc: 'Finished a day within 90-105% of your calorie goal', unlocked: everCalorieGoal || (totalCalories > 0 && totalCalories <= dailyGoal * 1.05 && totalCalories >= dailyGoal * 0.9), color: '#1D9E75', bg: '#EDFAF5', border: '#BAF0D8' },
+    { id: 'protein_goal', icon: '💪', title: 'Protein King', desc: 'Hit your protein goal in a day', unlocked: everProteinGoal || totalProtein >= proteinGoal, color: '#5B4FD4', bg: '#F0EFFD', border: '#DDD8FF' },
     { id: 'hydration', icon: '💧', title: 'Hydration Hero', desc: 'Drank all 8 glasses of water', unlocked: water >= 8, color: '#3B82F6', bg: '#EFF6FF', border: '#BFDBFE' },
     { id: 'first_exercise', icon: '🏃', title: 'Fitness Starter', desc: 'Logged your first workout', unlocked: exerciseLogs.length > 0, color: '#E8820C', bg: '#FEF4E8', border: '#F5D4A8' },
     { id: 'burned_500', icon: '🔥', title: 'Calorie Crusher', desc: 'Burned 500+ calories in a day', unlocked: totalBurned >= 500, color: '#D85A30', bg: '#FEF0EC', border: '#F5C4A8' },
     { id: 'weight_logged', icon: '⚖️', title: 'Scale Master', desc: 'Logged your weight', unlocked: weightLogs.length > 0, color: '#1D9E75', bg: '#EDFAF5', border: '#BAF0D8' },
     { id: 'weight_loss', icon: '📉', title: 'Losing It', desc: 'Lost weight since you started', unlocked: weightLogs.length >= 2 && weightLogs[0].weightLbs < weightLogs[weightLogs.length - 1].weightLbs, color: '#1D9E75', bg: '#EDFAF5', border: '#BAF0D8' },
-    { id: 'five_foods', icon: '🍽️', title: 'Food Tracker', desc: 'Logged 5+ foods in a day', unlocked: foodLogs.length >= 5, color: '#5B4FD4', bg: '#F0EFFD', border: '#DDD8FF' },
-    { id: 'all_meals', icon: '🌟', title: 'Full Day', desc: 'Logged all 4 meal types today', unlocked: mealCategories.every(cat => foodLogs.some(f => f.mealType === cat.key)), color: '#E8820C', bg: '#FEF4E8', border: '#F5D4A8' },
+    { id: 'five_foods', icon: '🍽️', title: 'Food Tracker', desc: 'Logged 5+ foods in a day', unlocked: everFiveFoods || foodLogs.length >= 5, color: '#5B4FD4', bg: '#F0EFFD', border: '#DDD8FF' },
+    { id: 'all_meals', icon: '🌟', title: 'Full Day', desc: 'Logged all 4 meal types in a day', unlocked: everAllMeals || mealCategories.every(cat => foodLogs.some(f => f.mealType === cat.key)), color: '#E8820C', bg: '#FEF4E8', border: '#F5D4A8' },
     { id: 'bmi_normal', icon: '❤️', title: 'Healthy Range', desc: 'BMI in the normal range', unlocked: bmi && parseFloat(bmi) >= 18.5 && parseFloat(bmi) < 25, color: '#D85A30', bg: '#FEF0EC', border: '#F5C4A8' },
   ];
   const unlockedCount = achievements.filter(a => a.unlocked).length;
 
+  // Progress charts: the server returns every day in range (null on days with nothing logged),
+  // so gaps show as gaps instead of fake zero-calorie days.
+  const rangeDays = chartRange === '7D' ? 7 : chartRange === '30D' ? 30 : 90;
+  const historyInRange = dailyHistory.slice(-rangeDays);
+  const loggedDays = historyInRange.filter(d => d.calories != null).length;
   const tooltipStyle = {
     contentStyle: { background: darkMode ? '#1a1a2e' : '#fff', border: darkMode ? '1px solid rgba(255,255,255,.1)' : '.5px solid #EBEBF0', borderRadius: '12px', fontSize: '12px' },
     labelStyle: { color: darkMode ? '#F0F0FF' : '#0A0A14', fontWeight: '600' },
@@ -1109,8 +1248,55 @@ function App() {
               </>
             ) : (
               <>
+                {authMode === 'register' && regStep === 2 ? (<>
+                  <h2 className="auth-title">About you</h2>
+                  <p className="auth-subtitle">Step 2 of 2 · Used only to calculate your calorie and protein goals</p>
+                  <div className="input-group"><label>Sex (for metabolic rate)</label>
+                    <div className="profile-options">
+                      {['male', 'female'].map(sx => (
+                        <button key={sx} type="button" className={`profile-option ${profile.sex === sx ? 'profile-option-active' : ''}`}
+                          onClick={() => setProfile({ ...profile, sex: sx })}>{sx === 'male' ? 'Male' : 'Female'}</button>
+                      ))}
+                    </div></div>
+                  <div className="auth-row">
+                    <div className="input-group"><label htmlFor="reg-age">Age</label>
+                      <input id="reg-age" className="auth-input" type="number" min="13" max="100" value={profile.age}
+                        onChange={e => setProfile({ ...profile, age: parseInt(e.target.value, 10) || 0 })}/></div>
+                    <div className="input-group"><label htmlFor="reg-weight">Weight (lbs)</label>
+                      <input id="reg-weight" className="auth-input" type="number" step="0.1" min="50" max="1000" value={profile.weightLbs}
+                        onChange={e => setProfile({ ...profile, weightLbs: parseFloat(e.target.value) || 0 })}/></div>
+                  </div>
+                  <div className="auth-row">
+                    <div className="input-group"><label htmlFor="reg-ft">Height (ft)</label>
+                      <input id="reg-ft" className="auth-input" type="number" min="3" max="8" value={profile.heightFeet}
+                        onChange={e => setProfile({ ...profile, heightFeet: parseInt(e.target.value, 10) || 0 })}/></div>
+                    <div className="input-group"><label htmlFor="reg-in">Height (in)</label>
+                      <input id="reg-in" className="auth-input" type="number" min="0" max="11" value={profile.heightInches}
+                        onChange={e => setProfile({ ...profile, heightInches: parseInt(e.target.value, 10) || 0 })}/></div>
+                  </div>
+                  <div className="input-group"><label>Goal</label>
+                    <div className="profile-options">
+                      {[{ v: 'lose', l: 'Lose weight' }, { v: 'maintain', l: 'Maintain' }, { v: 'gain', l: 'Build muscle' }].map(g => (
+                        <button key={g.v} type="button" className={`profile-option ${profile.goal === g.v ? 'profile-option-active' : ''}`}
+                          onClick={() => setProfile({ ...profile, goal: g.v })}>{g.l}</button>
+                      ))}
+                    </div></div>
+                  <div className="input-group"><label htmlFor="reg-activity">Activity level</label>
+                    <select id="reg-activity" className="auth-input" value={profile.activity}
+                      onChange={e => setProfile({ ...profile, activity: e.target.value })}>
+                      <option value="sedentary">Sedentary (desk job, little exercise)</option>
+                      <option value="light">Light (exercise 1-3 days/week)</option>
+                      <option value="moderate">Moderate (exercise 3-5 days/week)</option>
+                      <option value="active">Active (exercise 6-7 days/week)</option>
+                      <option value="veryactive">Very active (hard training or physical job)</option>
+                    </select></div>
+                  <div className="auth-goal-preview">Your starting goal: <strong>{dailyGoal} kcal</strong> · {proteinGoal} g protein per day</div>
+                  {authMessage && <p className="auth-error">{authMessage}</p>}
+                  <button className="auth-btn" onClick={handleAuth}>Create Account</button>
+                  <p className="auth-switch"><span onClick={() => { setRegStep(1); setAuthMessage(''); }}>← Back</span></p>
+                </>) : (<>
                 <h2 className="auth-title">{authMode === 'login' ? 'Welcome back' : 'Create account'}</h2>
-                <p className="auth-subtitle">{authMode === 'login' ? 'Sign in to continue your journey' : 'Start tracking your health today'}</p>
+                <p className="auth-subtitle">{authMode === 'login' ? 'Sign in to continue your journey' : 'Step 1 of 2 · Start tracking your health today'}</p>
                 {authMode === 'register' && (
                   <div className="input-group"><label>Full Name</label>
                     <input className="auth-input" placeholder="AJ Rayamajhi" value={authName} onChange={e => setAuthName(e.target.value)}/></div>
@@ -1120,15 +1306,17 @@ function App() {
                 <div className="input-group"><label>Password</label>
                   <input className="auth-input" type="password" placeholder="••••••••" value={authPassword}
                     onChange={e => setAuthPassword(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAuth()}/></div>
+                {authMode === 'register' && <p className="auth-hint">At least 8 characters.</p>}
                 {authMessage && <p className="auth-error">{authMessage}</p>}
-                <button className="auth-btn" onClick={handleAuth}>{authMode === 'login' ? 'Sign In' : 'Create Account'}</button>
+                <button className="auth-btn" onClick={handleAuth}>{authMode === 'login' ? 'Sign In' : 'Continue'}</button>
                 {authMode === 'login' && <p className="forgot-link" onClick={() => { setAuthMode('forgot'); setResetStep(1); }}>Forgot Password?</p>}
                 <p className="auth-switch">
                   {authMode === 'login' ? "Don't have an account? " : 'Already have an account? '}
-                  <span onClick={() => { setAuthMode(authMode === 'login' ? 'register' : 'login'); setAuthMessage(''); }}>
+                  <span onClick={() => { setAuthMode(authMode === 'login' ? 'register' : 'login'); setAuthMessage(''); setRegStep(1); }}>
                     {authMode === 'login' ? 'Sign Up' : 'Sign In'}
                   </span>
                 </p>
+                </>)}
               </>
             )}
           </div>
@@ -1163,15 +1351,18 @@ function App() {
           { id: 'supplements', icon: 'ti-pill', label: 'Supplements' },
         ].map(item => (
           <div key={item.id} className={`nav-item ${activeTab === item.id ? 'active' : ''}`}
-            onClick={() => setActiveTab(item.id)}>
-            <i className={`ti ${item.icon}`} aria-hidden="true"/>
+            role="button" tabIndex={0} aria-current={activeTab === item.id ? 'page' : undefined}
+            onClick={() => setActiveTab(item.id)}
+            onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setActiveTab(item.id); } }}>
             {item.label}
             {item.badge && <span className="nav-badge">{item.badge}</span>}
           </div>
         ))}
 
         <div className="nav-section-label">Account</div>
-        <div className={`nav-item ${activeTab === 'profile' ? 'active' : ''}`} onClick={() => setActiveTab('profile')}>
+        <div className={`nav-item ${activeTab === 'profile' ? 'active' : ''}`} role="button" tabIndex={0}
+          aria-current={activeTab === 'profile' ? 'page' : undefined} onClick={() => setActiveTab('profile')}
+          onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setActiveTab('profile'); } }}>
           Profile
         </div>
 
@@ -1179,7 +1370,7 @@ function App() {
           <div className="score-card">
             <div className="score-label">Health Score</div>
             <div className="score-number">{healthScore}</div>
-            <div className="score-sub">{healthLabel} · Top {Math.max(5, 100 - healthScore)}%</div>
+            <div className="score-sub" title={healthScoreTitle}>{healthLabel}</div>
             <div className="score-bar"><div className="score-bar-fill" style={{'--w':`${healthScore}%`}}/></div>
           </div>
           {streak > 0 && (
@@ -1204,8 +1395,16 @@ function App() {
           <p>"Every healthy choice compounds."</p>
         </div>
         <div className="topnav-right">
-          <button className="dark-mode-btn" onClick={() => setDarkMode(!darkMode)} title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}>
-            <i className={darkMode ? 'ti ti-sun' : 'ti ti-moon'} style={{fontSize:'16px', color: darkMode ? '#F5C842' : '#5B4FD4'}} aria-hidden="true"/>
+          <button className="dark-mode-btn" onClick={() => setDarkMode(!darkMode)} title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'} aria-label={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}>
+            {darkMode ? (
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#F5C842" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>
+              </svg>
+            ) : (
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#5B4FD4" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>
+              </svg>
+            )}
           </button>
           <div className="topnav-notif" style={{position:'relative'}}>
             <button
@@ -1300,7 +1499,7 @@ function App() {
                         <li key={f.key}>
                           <button type="button" className={`hero-focus-item ${f.done ? 'is-done' : ''}`}
                             aria-pressed={f.done}
-                            onClick={() => f.key === 'water' ? setWater(w => Math.min(w + 1, 20)) : setActiveTab(f.tab)}>
+                            onClick={() => f.key === 'water' ? updateWater(w => w + 1) : setActiveTab(f.tab)}>
                             <span className="hero-focus-check" aria-hidden="true">{f.done ? '✓' : ''}</span>
                             {f.label}
                           </button>
@@ -1309,7 +1508,7 @@ function App() {
                     </ul>
                   </div>
                 </div>
-                <div className="hero-score" title={`Health Score ${healthScore}/100 — nutrition 40%, activity 30%, streak 20%, hydration 10%`}>
+                <div className="hero-score" title={healthScoreTitle}>
                   <svg width="120" height="120" viewBox="0 0 120 120" aria-hidden="true">
                     <circle cx="60" cy="60" r="50" fill="none" stroke="rgba(255,255,255,.18)" strokeWidth="9"/>
                     <circle cx="60" cy="60" r="50" fill="none" stroke="#fff" strokeWidth="9"
@@ -1361,8 +1560,8 @@ function App() {
                     <span className="stat-card-val">{water}<small>/8</small></span>
                     <span className="stat-card-sub">glasses</span>
                     <div className="stat-card-actions">
-                      <button type="button" className="mini-btn" onClick={() => setWater(w => Math.max(w - 1, 0))} aria-label="Remove a glass" disabled={water === 0}>−</button>
-                      <button type="button" className="mini-btn mini-btn-primary" onClick={() => setWater(w => Math.min(w + 1, 20))} aria-label="Add a glass">+</button>
+                      <button type="button" className="mini-btn" onClick={() => updateWater(w => w - 1)} aria-label="Remove a glass" disabled={water === 0}>−</button>
+                      <button type="button" className="mini-btn mini-btn-primary" onClick={() => updateWater(w => w + 1)} aria-label="Add a glass">+</button>
                     </div>
                   </div>
                   <HydrationGlass filled={water}/>
@@ -1417,7 +1616,7 @@ function App() {
                     style={{transition:'stroke-dasharray 0.8s ease'}}/>
                 </svg>
                 <div className="calorie-ring-text">
-                  <span className="calorie-ring-num">{totalCalories}</span>
+                  <span className={`calorie-ring-num ${totalCalories >= 1000 ? "calorie-ring-num-sm" : ""}`}>{totalCalories}</span>
                   <span className="calorie-ring-label">eaten</span>
                 </div>
               </div>
@@ -1453,8 +1652,8 @@ function App() {
               {bmi && (
                 <div style={{textAlign:'right',flexShrink:0}}>
                   <div style={{fontSize:'10px',color:'#9898AA',marginBottom:'4px',textTransform:'uppercase',letterSpacing:'.5px'}}>BMI</div>
-                  <div style={{fontSize:'28px',fontWeight:'700',color:'#1D9E75',letterSpacing:'-1px',lineHeight:1}}>{bmi}</div>
-                  <div style={{fontSize:'10px',color:'#1D9E75',fontWeight:'600',background:'#EDFAF5',padding:'2px 8px',borderRadius:'20px',marginTop:'4px'}}>{bmiLabel}</div>
+                  <div style={{fontSize:'28px',fontWeight:'700',color:bmiTone.color,letterSpacing:'-1px',lineHeight:1}}>{bmi}</div>
+                  <div style={{fontSize:'10px',color:bmiTone.color,fontWeight:'600',background:bmiTone.bg,padding:'2px 8px',borderRadius:'20px',marginTop:'4px'}}>{bmiLabel}</div>
                 </div>
               )}
             </div>
@@ -1583,10 +1782,10 @@ function App() {
                           <div className="food-meal-dot" style={{background:cat.color}}/>
                           <div style={{flex:1,minWidth:0}}>
                             <p className="food-item-name">{f.foodName}</p>
-                            <p className="food-item-macros">{f.protein}g P · {f.carbs}g C · {f.fat}g F</p>
-                            {f.insight && f.insight !== 'A nutritious choice for your health!'
-                              ? <p className="food-insight">✦ {f.insight}</p>
-                              : <p className="food-insight-loading">⏳ Loading insight...</p>}
+                            <p className="food-item-macros">{f.servingLabel ? `${f.quantity && f.quantity !== 1 ? `${f.quantity} × ` : ""}${f.servingLabel} · ` : ""}{Math.round(f.protein*10)/10}g P · {Math.round(f.carbs*10)/10}g C · {Math.round(f.fat*10)/10}g F</p>
+                            {f.insight && f.insight !== 'A nutritious choice for your health!' && (
+                              <p className="food-insight">✦ {f.insight}</p>
+                            )}
                           </div>
                           <span className="food-item-cal">{f.calories}</span>
                           <button className="food-delete-btn" onClick={() => deleteFood(f.id)}>🗑️</button>
@@ -1623,15 +1822,66 @@ function App() {
               {message && <div className="log-message">{message}</div>}
               {searchResults.length > 0 && (
                 <div className="search-results">
-                  {searchResults.map((food,i) => (
-                    <div key={i} className="result-item">
-                      <div className="result-left">
-                        <p className="result-name">{food.name}</p>
-                        <p className="result-macros">{food.calories} cal · {food.protein}g protein · {food.carbs}g carbs · {food.fat}g fat</p>
+                  {searchResults.map((food) => {
+                    const def = food.portions[0];
+                    const m = portionMacros(food, def, 1);
+                    const isOpen = picked && picked.food.fdcId === food.fdcId;
+                    return (
+                      <div key={food.fdcId} className={`result-item ${isOpen ? 'result-item-open' : ''}`}>
+                        <div className="result-main">
+                          <div className="result-left">
+                            <p className="result-name">{food.name}</p>
+                            <p className="result-macros">
+                              {food.brand ? <span className="result-brand">{food.brand} · </span> : null}
+                              {def.label}: {m.calories} kcal · {m.protein}g P · {m.carbs}g C · {m.fat}g F
+                            </p>
+                          </div>
+                          <button className="log-btn" aria-expanded={isOpen}
+                            onClick={() => setPicked(isOpen ? null : { food, portionIdx: 0, qty: 1 })}>
+                            {isOpen ? 'Close' : '+ Add'}
+                          </button>
+                        </div>
+                        {isOpen && (() => {
+                          const portion = food.portions[picked.portionIdx] || def;
+                          const qtyNum = parseFloat(picked.qty);
+                          const valid = Number.isFinite(qtyNum) && qtyNum > 0 && qtyNum <= 100;
+                          const pm = valid ? portionMacros(food, portion, qtyNum) : null;
+                          return (
+                            <div className="portion-picker">
+                              <label className="portion-field">
+                                <span>Amount</span>
+                                <input type="number" inputMode="decimal" min="0.25" max="100" step="0.25"
+                                  className="search-input portion-qty" value={picked.qty}
+                                  onChange={e => setPicked({ ...picked, qty: e.target.value })}/>
+                              </label>
+                              <label className="portion-field portion-field-grow">
+                                <span>Serving</span>
+                                <select className="search-input" value={picked.portionIdx}
+                                  onChange={e => setPicked({ ...picked, portionIdx: parseInt(e.target.value, 10) })}>
+                                  {food.portions.map((p, i) => <option key={i} value={i}>{p.label}</option>)}
+                                </select>
+                              </label>
+                              <div className="portion-total" aria-live="polite">
+                                {pm ? <>
+                                  <strong>{pm.calories} kcal</strong>
+                                  <span>{pm.protein}g protein · {pm.carbs}g carbs · {pm.fat}g fat · {pm.grams} g</span>
+                                </> : <span>Enter an amount between 0.25 and 100</span>}
+                              </div>
+                              <button className="search-btn portion-log-btn" disabled={!pm}
+                                onClick={() => logFood({
+                                  name: food.brand ? `${food.name} (${food.brand})` : food.name,
+                                  calories: pm.calories, protein: pm.protein, carbs: pm.carbs, fat: pm.fat,
+                                  fdcId: food.fdcId, servingLabel: portion.label, quantity: qtyNum, grams: pm.grams,
+                                })}>
+                                Log to {mealCategories.find(c => c.key === mealType)?.label.replace(/^\S+\s/, '') || 'meal'}
+                              </button>
+                            </div>
+                          );
+                        })()}
                       </div>
-                      <button className="log-btn" onClick={() => logFood(food)}>+ Log</button>
-                    </div>
-                  ))}
+                    );
+                  })}
+                  <p className="result-source">Nutrition data: USDA FoodData Central</p>
                 </div>
               )}
             </div>
@@ -1795,13 +2045,13 @@ function App() {
                   <div className="analytics-card-title">📊 Calorie Trend</div>
                   <div className="analytics-card-sub">Daily intake — last {chartRange === '7D' ? '7' : chartRange === '30D' ? '30' : '90'} days</div>
                 </div>
-                <div className="analytics-card-badge">{dailyHistory.length} days</div>
+                <div className="analytics-card-badge">{loggedDays} of {rangeDays} days logged</div>
               </div>
-              {dailyHistory.length === 0 ? (
+              {loggedDays === 0 ? (
                 <div className="empty-state"><span>📊</span><p>Log food to see your trend</p></div>
               ) : (
                 <ResponsiveContainer width="100%" height={200}>
-                  <AreaChart data={chartRange === '7D' ? dailyHistory.slice(-7) : chartRange === '30D' ? dailyHistory.slice(-30) : dailyHistory}>
+                  <AreaChart data={historyInRange}>
                     <defs>
                       <linearGradient id="calGrad" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%" stopColor="#5B4FD4" stopOpacity={0.15}/>
@@ -1810,13 +2060,16 @@ function App() {
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-light)" vertical={false}/>
                     <XAxis dataKey="day" tick={{fontSize:10,fill:'var(--color-ink-tertiary)'}} axisLine={false} tickLine={false}
-                      interval={Math.max(0, Math.floor(dailyHistory.length / 6))}/>
-                    <YAxis tick={{fontSize:10,fill:'var(--color-ink-tertiary)'}} axisLine={false} tickLine={false} width={36}/>
+                      interval={Math.max(0, Math.floor(historyInRange.length / 6))}/>
+                    <YAxis tick={{fontSize:10,fill:'var(--color-ink-tertiary)'}} axisLine={false} tickLine={false} width={40}
+                      domain={[0, dataMax => Math.ceil(Math.max(dataMax || 0, dailyGoal) * 1.1 / 100) * 100]}/>
                     <Tooltip {...tooltipStyle}
                       formatter={(v) => [`${v} cal`, 'Calories']}
                       labelFormatter={(label, payload) => payload?.[0]?.payload?.date || label}/>
+                    <ReferenceLine y={dailyGoal} stroke="#1D9E75" strokeDasharray="4 4"
+                      label={{ value: `Goal ${dailyGoal}`, position: 'insideTopRight', fontSize: 10, fill: '#1D9E75' }}/>
                     <Area type="monotone" dataKey="calories" stroke="#5B4FD4" strokeWidth={2.5}
-                      fill="url(#calGrad)" dot={false} activeDot={{r:5,fill:'#5B4FD4'}} name="Calories"/>
+                      fill="url(#calGrad)" dot={{ r: 2.5, fill: '#5B4FD4' }} activeDot={{r:5,fill:'#5B4FD4'}} name="Calories"/>
                   </AreaChart>
                 </ResponsiveContainer>
               )}
@@ -1881,14 +2134,14 @@ function App() {
                 </div>
               </div>
               <ResponsiveContainer width="100%" height={200}>
-                <LineChart data={chartRange === '7D' ? weeklyData : chartRange === '30D' ? dailyHistory.slice(-30) : dailyHistory}>
+                <LineChart data={historyInRange}>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-light)" vertical={false}/>
                   <XAxis dataKey="day" tick={{fontSize:10,fill:'var(--color-ink-tertiary)'}} axisLine={false} tickLine={false}/>
                   <YAxis tick={{fontSize:10,fill:'var(--color-ink-tertiary)'}} axisLine={false} tickLine={false} width={28}/>
                   <Tooltip {...tooltipStyle}/>
-                  <Line type="monotone" dataKey="protein" stroke="#5B4FD4" strokeWidth={2} dot={false} activeDot={{r:4}} name="Protein (g)"/>
-                  <Line type="monotone" dataKey="carbs" stroke="#1D9E75" strokeWidth={2} dot={false} activeDot={{r:4}} name="Carbs (g)"/>
-                  <Line type="monotone" dataKey="fat" stroke="#E8820C" strokeWidth={2} dot={false} activeDot={{r:4}} name="Fat (g)"/>
+                  <Line type="monotone" dataKey="protein" stroke="#5B4FD4" strokeWidth={2} dot={{ r: 2 }} activeDot={{r:4}} name="Protein (g)"/>
+                  <Line type="monotone" dataKey="carbs" stroke="#1D9E75" strokeWidth={2} dot={{ r: 2 }} activeDot={{r:4}} name="Carbs (g)"/>
+                  <Line type="monotone" dataKey="fat" stroke="#E8820C" strokeWidth={2} dot={{ r: 2 }} activeDot={{r:4}} name="Fat (g)"/>
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -1909,7 +2162,7 @@ function App() {
                 </div>
                 <ResponsiveContainer width="100%" height={180}>
                   <AreaChart data={[...weightLogs].reverse().slice(-(chartRange === '7D' ? 7 : chartRange === '30D' ? 30 : 90)).map(w => ({
-                    date: new Date(w.date).toLocaleDateString('en-US',{month:'short',day:'numeric'}),
+                    date: shortDate(w.date),
                     weight: w.weightLbs
                   }))}>
                     <defs>
@@ -1973,7 +2226,7 @@ function App() {
                 <div className="weight-list">
                   {weightLogs.slice(0,5).map(w => (
                     <div key={w.id} className="weight-item">
-                      <span className="weight-date">{new Date(w.date).toLocaleDateString('en-US',{month:'short',day:'numeric'})}</span>
+                      <span className="weight-date">{shortDate(w.date)}</span>
                       <span className="weight-val">{w.weightLbs} lbs</span>
                       <button onClick={() => deleteWeight(w.id)}
                         className="weight-delete-btn"
@@ -2037,6 +2290,10 @@ function App() {
                 )}
               </div>
               <button className="profile-save-btn" onClick={logBodyFat}>Calculate & Log</button>
+              {bodyFatError && <p className="form-error" role="alert">{bodyFatError}</p>}
+              <p className="log-sub" style={{marginTop:'10px'}}>
+                Uses your profile height ({profile.heightFeet}'{profile.heightInches}") and sex. The Navy method is an estimate, typically within 3-4 percentage points.
+              </p>
             </div>
 
             {bodyFatLogs.length > 0 && (
@@ -2059,7 +2316,7 @@ function App() {
                 <div className="weight-list">
                   {bodyFatLogs.map(b => (
                     <div key={b.id} className="weight-item">
-                      <span className="weight-date">{new Date(b.date).toLocaleDateString('en-US',{month:'short',day:'numeric'})}</span>
+                      <span className="weight-date">{shortDate(b.date)}</span>
                       <span className="weight-val">{b.bodyFatPercent}%</span>
                       <button onClick={() => deleteBodyFat(b.id)} className="delete-btn">🗑️</button>
                     </div>
@@ -2253,7 +2510,7 @@ function App() {
                 <div className="profile-field"><label>Age</label>
                   <input type="number" className="profile-input" value={profile.age} onChange={e=>setProfile({...profile,age:parseInt(e.target.value)||0})}/></div>
                 <div className="profile-field"><label>Weight (lbs)</label>
-                  <input type="number" className="profile-input" value={profile.weightLbs} onChange={e=>setProfile({...profile,weightLbs:parseInt(e.target.value)||0})}/></div>
+                  <input type="number" className="profile-input" value={profile.weightLbs} step="0.1" onChange={e=>setProfile({...profile,weightLbs:parseFloat(e.target.value)||0})}/></div>
                 <div className="profile-field"><label>Height (feet)</label>
                   <input type="number" className="profile-input" value={profile.heightFeet} onChange={e=>setProfile({...profile,heightFeet:parseInt(e.target.value)||0})}/></div>
                 <div className="profile-field"><label>Height (inches)</label>
@@ -2286,30 +2543,25 @@ function App() {
               <div className="profile-field-full" style={{marginTop:'8px'}}>
   <label>Meal Reminders</label>
   <div className="notif-settings-card">
-    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:'12px'}}>
       <div>
-        <div className="notif-settings-title">Push Notifications</div>
-        <div className="tab-micro-label">Breakfast 8AM · Lunch 12PM · Dinner 6PM</div>
+        <div className="notif-settings-title">Meal reminders</div>
+        <div className="tab-micro-label">
+          {notifPermission === 'granted' ? 'On: one reminder per meal (8-10 AM, 12-2 PM, 6-8 PM) while LifeOS is open, only if that meal isn\'t logged.'
+            : notifPermission === 'denied' ? 'Blocked in your browser settings. Allow notifications for this site to turn them on.'
+            : notifPermission === 'unsupported' ? 'Not supported in this browser.'
+            : 'A nudge if breakfast, lunch or dinner isn\'t logged.'}
+        </div>
       </div>
-      <button
-        onClick={async () => {
-          if ('Notification' in window) {
-            const perm = await Notification.requestPermission();
-            if (perm === 'granted') {
-              new Notification('✅ LifeOS Reminders On!', {
-                body: "You'll get meal reminders at 8AM, 12PM and 6PM.",
-                icon: '/favicon.ico'
-              });
-            }
-          }
-        }}
-        className="notif-enable-btn">
-        {typeof Notification !== 'undefined' && Notification.permission === 'granted' ? '✅ Enabled' : 'Enable'}
-      </button>
+      {notifPermission === 'default' && (
+        <button onClick={enableReminders} className="notif-enable-btn">Enable</button>
+      )}
+      {notifPermission === 'granted' && <span className="notif-enable-btn" aria-label="Reminders enabled">✅ On</span>}
     </div>
   </div>
 </div>
               <button className="profile-save-btn" onClick={saveProfile}>{profileSaved ? '✅ Saved!' : 'Save Profile'}</button>
+              {profileError && <p className="form-error" role="alert">{profileError}</p>}
             </div>
           </div>
         )}
@@ -2368,7 +2620,7 @@ function App() {
                       <div>
                         <div style={{fontSize:'13px',fontWeight:'600'}}>{s.hoursSlept}h · {s.quality}</div>
                         <div className="tab-micro-label">
-                          {new Date(s.date).toLocaleDateString('en-US',{month:'short',day:'numeric'})}
+                          {shortDate(s.date)}
                           {s.bedtime && ` · ${s.bedtime}–${s.wakeTime}`}
                         </div>
                       </div>
@@ -2450,7 +2702,7 @@ function App() {
                           <span style={{fontSize:'13px',fontWeight:'600'}}>{m.moodLabel} ({m.moodScore}/10)</span>
                         </div>
                         <div className="tab-micro-label">
-                          {new Date(m.date).toLocaleDateString('en-US',{month:'short',day:'numeric'})} · Energy: {m.energyLevel} · Stress: {m.stressLevel}
+                          {shortDate(m.date)} · Energy: {m.energyLevel} · Stress: {m.stressLevel}
                         </div>
                         {m.notes && <div className="tab-micro-label" style={{fontStyle:'italic'}}>"{m.notes}"</div>}
                       </div>
@@ -2507,7 +2759,7 @@ function App() {
                       <div>
                         <div style={{fontSize:'13px',fontWeight:'600'}}>{s.supplementName}</div>
                         <div className="tab-micro-label">
-                          {s.dosage}{s.unit} · {s.timeOfDay?.replace('_',' ')} · {new Date(s.date).toLocaleDateString('en-US',{month:'short',day:'numeric'})}
+                          {s.dosage}{s.unit} · {s.timeOfDay?.replace('_',' ')} · {shortDate(s.date)}
                         </div>
                       </div>
                       <div style={{display:'flex',alignItems:'center',gap:'10px'}}>

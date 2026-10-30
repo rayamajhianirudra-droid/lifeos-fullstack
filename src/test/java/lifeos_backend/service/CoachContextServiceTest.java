@@ -61,7 +61,7 @@ class CoachContextServiceTest {
         when(moodRepo.findByUserIdAndDateBetweenOrderByDateAsc(eq(USER), any(), any())).thenReturn(List.of(m));
         when(weightRepo.findByUserIdOrderByDateDesc(USER)).thenReturn(List.of(
                 weight(172.4, day), weight(176.0, day.minusDays(30))));
-        when(foodLogService.getStreakForUser(USER)).thenReturn(9);
+        when(foodLogService.getStreakForUser(eq(USER), any())).thenReturn(9);
     }
 
     @Test

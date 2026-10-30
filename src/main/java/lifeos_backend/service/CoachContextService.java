@@ -157,7 +157,7 @@ public class CoachContextService {
             sb.append('\n');
         }
 
-        sb.append("LOGGING STREAK: ").append(foodLogService.getStreakForUser(userId)).append(" days\n");
+        sb.append("LOGGING STREAK: ").append(foodLogService.getStreakForUser(userId, day)).append(" days\n");
         return sb.toString();
     }
 

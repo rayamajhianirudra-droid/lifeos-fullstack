@@ -41,8 +41,12 @@ public class FoodLogController {
             @RequestHeader("Authorization") String authHeader,
             @RequestBody FoodLog foodLog) {
         Long userId = getUserIdFromToken(authHeader);
+        String problem = validate(foodLog);
+        if (problem != null) return ResponseEntity.badRequest().build();
         foodLog.setUserId(userId);
         foodLog.setId(null); // never let a client overwrite an existing row
+        foodLog.setInsight(null);
+        foodLog.setFoodName(foodLog.getFoodName().trim());
         foodLog.setDate(LogDates.resolve(foodLog.getDate()));
         return ResponseEntity.ok(foodLogService.addFoodLog(foodLog));
     }
@@ -53,7 +57,8 @@ public class FoodLogController {
             @RequestParam(required = false) String date) {
         Long userId = getUserIdFromToken(authHeader);
         if (date != null) {
-            LocalDate localDate = LocalDate.parse(date);
+            LocalDate localDate = parseDate(date);
+            if (localDate == null) return ResponseEntity.badRequest().build();
             return ResponseEntity.ok(foodLogService.getFoodLogsByUserAndDate(userId, localDate));
         }
         return ResponseEntity.ok(foodLogService.getFoodLogsByUser(userId));
@@ -61,9 +66,10 @@ public class FoodLogController {
 
     @GetMapping("/streak")
     public ResponseEntity<Map<String, Integer>> getStreak(
-            @RequestHeader("Authorization") String authHeader) {
+            @RequestHeader("Authorization") String authHeader,
+            @RequestParam(required = false) String date) {
         Long userId = getUserIdFromToken(authHeader);
-        int streak = foodLogService.getStreakForUser(userId);
+        int streak = foodLogService.getStreakForUser(userId, LogDates.resolve(date));
         return ResponseEntity.ok(Map.of("streak", streak));
     }
 
@@ -75,5 +81,47 @@ public class FoodLogController {
         return foodLogService.deleteFoodLogForUser(id, userId)
                 ? ResponseEntity.ok().build()
                 : ResponseEntity.notFound().build();
+    }
+
+    /** GET /api/foodlogs/history?days=30&end=2026-10-27 : daily totals, oldest first (charts, sparklines). */
+    @GetMapping("/history")
+    public ResponseEntity<List<Map<String, Object>>> history(
+            @RequestHeader("Authorization") String authHeader,
+            @RequestParam(defaultValue = "30") int days,
+            @RequestParam(required = false) String end) {
+        Long userId = getUserIdFromToken(authHeader);
+        int d = Math.max(1, Math.min(days, 365));
+        return ResponseEntity.ok(foodLogService.history(userId, LogDates.resolve(end), d));
+    }
+
+    /** GET /api/foodlogs/weekly?end=2026-10-27 : the last 7 days. */
+    @GetMapping("/weekly")
+    public ResponseEntity<List<Map<String, Object>>> weekly(
+            @RequestHeader("Authorization") String authHeader,
+            @RequestParam(required = false) String end) {
+        Long userId = getUserIdFromToken(authHeader);
+        return ResponseEntity.ok(foodLogService.history(userId, LogDates.resolve(end), 7));
+    }
+
+    private static final java.util.Set<String> MEALS = java.util.Set.of("breakfast", "lunch", "dinner", "snack");
+
+    /** Rejects impossible values so one bad request can't corrupt totals, charts or the AI coach. */
+    static String validate(FoodLog f) {
+        if (f.getFoodName() == null || f.getFoodName().isBlank() || f.getFoodName().length() > 150) return "name";
+        if (!finiteIn(f.getCalories(), 0, 10000)) return "calories";
+        if (!finiteIn(f.getProtein(), 0, 1000) || !finiteIn(f.getCarbs(), 0, 1000) || !finiteIn(f.getFat(), 0, 1000)) return "macros";
+        if (f.getMealType() == null || !MEALS.contains(f.getMealType())) return "mealType";
+        if (f.getQuantity() != null && !finiteIn(f.getQuantity(), 0.01, 100)) return "quantity";
+        if (f.getGrams() != null && !finiteIn(f.getGrams(), 0, 10000)) return "grams";
+        if (f.getServingLabel() != null && f.getServingLabel().length() > 120) return "servingLabel";
+        return null;
+    }
+
+    private static boolean finiteIn(double v, double min, double max) {
+        return Double.isFinite(v) && v >= min && v <= max;
+    }
+
+    private static LocalDate parseDate(String s) {
+        try { return LocalDate.parse(s); } catch (Exception e) { return null; }
     }
 }
