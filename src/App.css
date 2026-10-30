@@ -704,7 +704,7 @@ body{
 }
 .search-input:focus{background:#fff;border-color:#5B4FD4;box-shadow:0 0 0 3px rgba(91,79,212,.1)}
 .search-btn{
-  padding:12px 18px;background:#0A0A14;
+  padding:12px 18px;background:#0A0A14;color:#fff;font-family:var(--font-family);
   border:none;border-radius:12px;font-size:18px;
   cursor:pointer;transition:all .2s;position:relative;overflow:hidden;
 }
@@ -1954,3 +1954,35 @@ body.dark .chat-header-bar{background:rgba(255,255,255,.02);border-color:rgba(25
 body.dark .chat-header-name{color:#F0F0FF}
 body.dark .chat-clear-btn,body.dark .chat-stat-chip{background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.1);color:rgba(255,255,255,.7)}
 body.dark .chat-clear-btn:hover{background:rgba(216,90,48,.15);color:#F59E7B}
+
+/* ── Food search: portion picker (audit fix: real servings instead of per-100 g) ── */
+.result-item{flex-direction:column;align-items:stretch}
+.result-main{display:flex;align-items:center;gap:12px}
+.result-item-open{background:var(--color-primary-light)}
+.result-item-open:hover{background:var(--color-primary-light)}
+.result-brand{color:var(--color-ink);font-weight:600}
+.result-source{font-size:10.5px;color:var(--color-ink-secondary);padding:8px 16px;margin:0;background:var(--color-surface-raised)}
+.portion-picker{display:grid;grid-template-columns:110px 1fr;gap:10px;margin-top:12px;align-items:end}
+.portion-field{display:flex;flex-direction:column;gap:4px;font-size:11px;font-weight:600;color:var(--color-ink-secondary);text-transform:uppercase;letter-spacing:.5px}
+.portion-field .search-input{text-transform:none;letter-spacing:0;font-weight:500}
+.portion-field-grow{min-width:0}
+.portion-field select.search-input{appearance:auto;width:100%}
+.portion-total{grid-column:1/-1;display:flex;flex-wrap:wrap;align-items:baseline;gap:8px;font-size:12px;color:var(--color-ink-secondary)}
+.portion-total strong{font-size:20px;color:var(--color-ink);letter-spacing:-.4px}
+.portion-log-btn{grid-column:1/-1;width:100%;padding:12px;font-weight:700}
+.portion-log-btn:disabled{opacity:.5;cursor:not-allowed}
+.form-error{color:var(--color-danger);background:var(--color-danger-bg);border:.5px solid var(--color-danger-border);border-radius:10px;padding:8px 12px;font-size:12.5px;margin:10px 0 0}
+.reminder-row{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:16px;padding:14px;border-radius:14px;background:var(--color-surface-raised);border:.5px solid var(--color-border)}
+.reminder-title{font-size:13px;font-weight:700;color:var(--color-ink);margin-bottom:2px}
+body.dark .result-item-open,body.dark .result-item-open:hover{background:rgba(91,79,212,.15)}
+body.dark .result-source{background:rgba(255,255,255,.03)}
+body.dark .reminder-row{background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.08)}
+@media(max-width:480px){.portion-picker{grid-template-columns:90px 1fr}}
+.auth-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.auth-hint{font-size:11.5px;color:var(--color-ink-secondary);margin:-6px 0 10px}
+.auth-goal-preview{font-size:13px;color:var(--color-ink-secondary);background:var(--color-primary-light);border-radius:12px;padding:10px 12px;margin:4px 0 12px}
+.auth-goal-preview strong{color:var(--color-primary)}
+.auth-card .profile-options{margin-top:4px}
+.nav-item:focus-visible{outline:2px solid var(--color-primary);outline-offset:2px}
+.calorie-ring-text{z-index:1}
+.calorie-ring-num.calorie-ring-num-sm{font-size:20px !important;letter-spacing:-.6px}

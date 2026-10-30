@@ -1,5 +1,7 @@
 package lifeos_backend.controller;
 
+import lifeos_backend.service.Inputs;
+import java.util.Set;
 import lifeos_backend.service.LogDates;
 import lifeos_backend.model.MoodLog;
 import lifeos_backend.repository.MoodRepository;
@@ -35,13 +37,15 @@ public class MoodController {
     @PostMapping
     public ResponseEntity<MoodLog> log(@RequestHeader("Authorization") String auth,
                                         @RequestBody Map<String, Object> body) {
+        Double score = Inputs.num(body.get("moodScore"), 1, 10);
+        if (score == null) return ResponseEntity.badRequest().build();
         MoodLog m = new MoodLog();
         m.setUserId(getUserId(auth));
-        m.setMoodScore(Integer.parseInt(body.get("moodScore").toString()));
-        m.setMoodLabel((String) body.getOrDefault("moodLabel", "Neutral"));
-        m.setEnergyLevel((String) body.getOrDefault("energyLevel", "medium"));
-        m.setStressLevel((String) body.getOrDefault("stressLevel", "low"));
-        m.setNotes((String) body.getOrDefault("notes", ""));
+        m.setMoodScore((int) Math.round(score));
+        m.setMoodLabel(Inputs.text(body.get("moodLabel"), 30));
+        m.setEnergyLevel(Inputs.oneOf(body.get("energyLevel"), Set.of("low", "medium", "high"), "medium"));
+        m.setStressLevel(Inputs.oneOf(body.get("stressLevel"), Set.of("low", "medium", "high"), "low"));
+        m.setNotes(Inputs.text(body.get("notes"), 500));
         m.setDate(LogDates.resolve(body.get("date")));
         return ResponseEntity.ok(moodRepository.save(m));
     }
