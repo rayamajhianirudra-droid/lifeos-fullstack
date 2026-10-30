@@ -1,0 +1,42 @@
+# Render Blueprint for the LifeOS Health backend.
+# Render dashboard > New > Blueprint > pick this repo. Secrets are marked
+# sync: false, so Render asks for them in the dashboard; they never live in git.
+# Full walkthrough: docs/deploy-render-neon.md
+services:
+  - type: web
+    name: lifeos-backend
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    branch: master
+    autoDeploy: true
+    # Ohio is Render's closest region to Minnesota. Create the Neon database in
+    # AWS us-east-2 (Ohio) too, so every query stays in the same area.
+    region: ohio
+    healthCheckPath: /api/health
+    # Only rebuild when backend files change (frontend lives on Vercel).
+    buildFilter:
+      paths:
+        - src/main/**
+        - pom.xml
+        - Dockerfile
+        - .dockerignore
+    envVars:
+      # Render passes Cloudflare's True-Client-IP; see RateLimiter.clientIp.
+      - key: CLIENT_IP_HEADER
+        value: True-Client-IP
+      - key: JWT_SECRET
+        sync: false
+      - key: SPRING_DATASOURCE_URL
+        sync: false
+      - key: SPRING_DATASOURCE_USERNAME
+        sync: false
+      - key: SPRING_DATASOURCE_PASSWORD
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: USDA_API_KEY
+        sync: false

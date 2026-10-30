@@ -1,0 +1,19 @@
+# Only the backend goes into the image. Keep the frontend, build output,
+# local config and anything secret out of the Docker build context.
+.git
+.github
+.vscode
+.idea
+node_modules
+build
+public
+target
+output.txt
+*.md
+.env
+.env.*
+src/App.*
+src/index.*
+src/*.js
+src/*.css
+src/test

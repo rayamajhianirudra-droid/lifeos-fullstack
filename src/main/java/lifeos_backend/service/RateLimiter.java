@@ -12,7 +12,7 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * Small in-memory sliding-window rate limiter (no extra dependencies).
  *
- * Good for a single backend instance, which is how LifeOS runs on Railway today.
+ * Good for a single backend instance, which is how LifeOS runs today (Render free tier).
  * If the backend is ever scaled to several instances, move these counters to a
  * shared store (Redis or a Postgres table) so limits apply across instances.
  */
@@ -63,17 +63,59 @@ public class RateLimiter {
     }
 
     /**
-     * Best-effort client IP. Railway's proxy appends the real client address as the
-     * LAST X-Forwarded-For entry; earlier entries can be forged by the client, so we
-     * never trust them. IP limits are kept generous because many users can share an IP.
+     * Name of a header the hosting platform sets to the real client IP and that the
+     * client cannot forge. On Render, traffic passes through Cloudflare, which
+     * overwrites True-Client-IP, while the LAST X-Forwarded-For entry is a shared
+     * Cloudflare edge address. Keying limits on that address would let one attacker
+     * lock every user out of login, so on Render set CLIENT_IP_HEADER=True-Client-IP.
+     * Unset (Railway, local) keeps the X-Forwarded-For behaviour below.
      */
+    private static final String TRUSTED_IP_HEADER = blankToNull(System.getenv("CLIENT_IP_HEADER"));
+
+    /** Logged once so a misconfigured header shows up in the logs (no IPs are logged). */
+    private static final java.util.concurrent.atomic.AtomicBoolean HEADER_CHECKED =
+            new java.util.concurrent.atomic.AtomicBoolean(false);
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(RateLimiter.class);
+
+    /** Best-effort client IP using the CLIENT_IP_HEADER environment setting. */
     public static String clientIp(HttpServletRequest request) {
+        return clientIp(request, TRUSTED_IP_HEADER);
+    }
+
+    /**
+     * Best-effort client IP. If trustedHeader is set and holds a plausible IP, use it.
+     * Otherwise fall back to the LAST X-Forwarded-For entry (Railway appends the real
+     * client there); earlier entries can be forged by the client, so we never trust
+     * them. IP limits are kept generous because many users can share an IP.
+     */
+    static String clientIp(HttpServletRequest request, String trustedHeader) {
+        if (trustedHeader != null) {
+            String v = request.getHeader(trustedHeader);
+            boolean ok = looksLikeIp(v);
+            if (HEADER_CHECKED.compareAndSet(false, true)) {
+                if (ok) log.info("Client IP taken from the {} header", trustedHeader);
+                else log.warn("CLIENT_IP_HEADER={} is set but the header is missing or invalid; "
+                        + "falling back to X-Forwarded-For", trustedHeader);
+            }
+            if (ok) return v.trim();
+        }
         String xff = request.getHeader("X-Forwarded-For");
         if (xff != null && !xff.isBlank()) {
             String[] parts = xff.split(",");
             return parts[parts.length - 1].trim();
         }
         return request.getRemoteAddr();
+    }
+
+    /** IPv4 or IPv6 characters only, sane length; rejects junk or injected values. */
+    static boolean looksLikeIp(String v) {
+        if (v == null) return false;
+        String s = v.trim();
+        return !s.isEmpty() && s.length() <= 45 && s.matches("[0-9A-Fa-f:.]+");
+    }
+
+    private static String blankToNull(String s) {
+        return (s == null || s.isBlank()) ? null : s.trim();
     }
 
     private static void prune(Deque<Long> q, long cutoff) {

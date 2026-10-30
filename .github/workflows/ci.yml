@@ -1,0 +1,102 @@
+name: CI
+
+# Runs on every pull request and every push to master.
+# Nothing here uses real secrets: the JWT key is generated per run and the
+# database is a throwaway Postgres container.
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend-tests:
+    name: Backend tests (real Postgres)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: lifeos_db
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ci-only-password
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+      - name: Run tests
+        run: |
+          export JWT_SECRET="$(openssl rand -base64 48)"
+          mvn -B test
+        env:
+          SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/lifeos_db
+          SPRING_DATASOURCE_USERNAME: postgres
+          SPRING_DATASOURCE_PASSWORD: ci-only-password
+          RESEND_API_KEY: ci-placeholder-not-a-key
+
+  docker-smoke:
+    name: Docker image boots in 512 MB
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: lifeos_db
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ci-only-password
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build -t lifeos-backend .
+      - name: Run container with Render free-tier limits (512 MB, 0.1 CPU)
+        run: |
+          docker run -d --name lifeos --network host \
+            --memory 512m --memory-swap 512m --cpus 0.1 \
+            -e PORT=8080 \
+            -e JWT_SECRET="$(openssl rand -base64 48)" \
+            -e SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/lifeos_db \
+            -e SPRING_DATASOURCE_USERNAME=postgres \
+            -e SPRING_DATASOURCE_PASSWORD=ci-only-password \
+            -e RESEND_API_KEY=ci-placeholder-not-a-key \
+            -e CLIENT_IP_HEADER=True-Client-IP \
+            lifeos-backend
+      - name: Smoke test
+        run: bash .github/scripts/smoke-test.sh http://localhost:8080 lifeos
+      - name: Startup log
+        if: always()
+        run: docker logs lifeos 2>&1 | tail -60
+
+  frontend-build:
+    name: Frontend build (same as Vercel)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Build (lint warnings fail, like Vercel)
+        run: npm run build
+        env:
+          CI: "true"

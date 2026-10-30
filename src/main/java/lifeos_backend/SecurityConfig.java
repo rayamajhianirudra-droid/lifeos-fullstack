@@ -31,10 +31,12 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        // Public: CORS preflight, login/register/password reset, error page.
+                        // Public: CORS preflight, login/register/password reset, error page, health.
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/error").permitAll()
+                        // Liveness check for the host and uptime pinger (no DB, no data).
+                        .requestMatchers(HttpMethod.GET, "/api/health").permitAll()
                         // Everything else needs a valid JWT.
                         .anyRequest().authenticated()
                 )
