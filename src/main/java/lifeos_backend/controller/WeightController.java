@@ -29,18 +29,31 @@ public class WeightController {
 
     @GetMapping
     public ResponseEntity<List<WeightLog>> getAll(@RequestHeader("Authorization") String auth) {
-        return ResponseEntity.ok(weightRepository.findByUserIdOrderByDateAsc(getUserId(auth)));
+        // Newest first: the app treats element 0 as the current weight.
+        return ResponseEntity.ok(weightRepository.findByUserIdOrderByDateDescIdDesc(getUserId(auth)));
     }
 
     @PostMapping
     public ResponseEntity<WeightLog> log(@RequestHeader("Authorization") String auth,
                                           @RequestBody Map<String, Object> body) {
+        Double lbs = number(body.get("weightLbs"));
+        if (lbs == null || lbs < 50 || lbs > 1000) return ResponseEntity.badRequest().build();
+        Object notes = body.get("notes");
+        Long userId = getUserId(auth);
         WeightLog w = new WeightLog();
-        w.setUserId(getUserId(auth));
-        w.setWeightLbs(Double.parseDouble(body.get("weightLbs").toString()));
-        w.setNotes((String) body.getOrDefault("notes", ""));
+        w.setUserId(userId);
+        w.setWeightLbs(Math.round(lbs * 10) / 10.0);
+        w.setNotes(notes == null ? "" : notes.toString().substring(0, Math.min(notes.toString().length(), 300)));
         w.setDate(LogDates.resolve(body.get("date")));
-        return ResponseEntity.ok(weightRepository.save(w));
+        WeightLog saved = weightRepository.save(w);
+
+        // Keep the profile weight current, so calorie and protein goals follow real progress.
+        boolean isNewest = weightRepository.findByUserIdOrderByDateDescIdDesc(userId).stream()
+                .findFirst().map(x -> x.getId().equals(saved.getId())).orElse(false);
+        if (isNewest) {
+            userRepository.findById(userId).ifPresent(u -> { u.setWeightLbs(saved.getWeightLbs()); userRepository.save(u); });
+        }
+        return ResponseEntity.ok(saved);
     }
 
     @DeleteMapping("/{id}")
@@ -56,5 +69,15 @@ public class WeightController {
                     return ResponseEntity.ok().<Void>build();
                 })
                 .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
+    static Double number(Object v) {
+        if (v == null) return null;
+        try {
+            double d = (v instanceof Number n) ? n.doubleValue() : Double.parseDouble(v.toString());
+            return Double.isFinite(d) ? d : null;
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 }

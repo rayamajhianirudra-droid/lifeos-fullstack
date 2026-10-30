@@ -1,5 +1,7 @@
 package lifeos_backend.controller;
 
+import lifeos_backend.service.Inputs;
+import java.util.Set;
 import lifeos_backend.service.LogDates;
 import lifeos_backend.model.CustomFood;
 import lifeos_backend.model.FoodLog;
@@ -44,15 +46,24 @@ public class CustomFoodController {
     @PostMapping
     public ResponseEntity<CustomFood> create(@RequestHeader("Authorization") String auth,
                                               @RequestBody Map<String, Object> body) {
+        String name = Inputs.text(body.get("foodName"), 120);
+        Double kcal = Inputs.num(body.get("calories"), 0, 5000);
+        Double p = body.get("protein") == null || body.get("protein").toString().isBlank() ? Double.valueOf(0) : Inputs.num(body.get("protein"), 0, 500);
+        Double c = body.get("carbs") == null || body.get("carbs").toString().isBlank() ? Double.valueOf(0) : Inputs.num(body.get("carbs"), 0, 500);
+        Double f = body.get("fat") == null || body.get("fat").toString().isBlank() ? Double.valueOf(0) : Inputs.num(body.get("fat"), 0, 500);
+        Double size = body.get("servingSize") == null ? Double.valueOf(100) : Inputs.num(body.get("servingSize"), 0.1, 5000);
+        if (name.isEmpty() || kcal == null || p == null || c == null || f == null || size == null) {
+            return ResponseEntity.badRequest().build();
+        }
         CustomFood cf = new CustomFood();
         cf.setUserId(getUserId(auth));
-        cf.setFoodName((String) body.get("foodName"));
-        cf.setCalories(Double.parseDouble(body.get("calories").toString()));
-        cf.setProtein(Double.parseDouble(body.getOrDefault("protein", "0").toString()));
-        cf.setCarbs(Double.parseDouble(body.getOrDefault("carbs", "0").toString()));
-        cf.setFat(Double.parseDouble(body.getOrDefault("fat", "0").toString()));
-        cf.setServingSize(Double.parseDouble(body.getOrDefault("servingSize", "100").toString()));
-        cf.setServingUnit((String) body.getOrDefault("servingUnit", "g"));
+        cf.setFoodName(name);
+        cf.setCalories(kcal);
+        cf.setProtein(p);
+        cf.setCarbs(c);
+        cf.setFat(f);
+        cf.setServingSize(size);
+        cf.setServingUnit(Inputs.oneOf(body.get("servingUnit"), Set.of("g", "ml", "oz", "cup", "piece", "serving", "tbsp", "tsp", "slice"), "g"));
         return ResponseEntity.ok(customFoodRepository.save(cf));
     }
 

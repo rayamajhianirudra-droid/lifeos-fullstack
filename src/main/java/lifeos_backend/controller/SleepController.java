@@ -1,5 +1,7 @@
 package lifeos_backend.controller;
 
+import lifeos_backend.service.Inputs;
+import java.util.Set;
 import lifeos_backend.service.LogDates;
 import lifeos_backend.model.SleepLog;
 import lifeos_backend.repository.SleepRepository;
@@ -53,13 +55,15 @@ public class SleepController {
     @PostMapping
     public ResponseEntity<SleepLog> log(@RequestHeader("Authorization") String auth,
                                          @RequestBody Map<String, Object> body) {
+        Double hours = Inputs.num(body.get("hoursSlept"), 0, 24);
+        if (hours == null) return ResponseEntity.badRequest().build();
         SleepLog s = new SleepLog();
         s.setUserId(getUserId(auth));
-        s.setHoursSlept(Double.parseDouble(body.get("hoursSlept").toString()));
-        s.setQuality((String) body.getOrDefault("quality", "good"));
-        s.setBedtime((String) body.getOrDefault("bedtime", ""));
-        s.setWakeTime((String) body.getOrDefault("wakeTime", ""));
-        s.setNotes((String) body.getOrDefault("notes", ""));
+        s.setHoursSlept(Math.round(hours * 10) / 10.0);
+        s.setQuality(Inputs.oneOf(body.get("quality"), Set.of("poor", "fair", "good", "great", "excellent"), "good"));
+        s.setBedtime(Inputs.text(body.get("bedtime"), 10));
+        s.setWakeTime(Inputs.text(body.get("wakeTime"), 10));
+        s.setNotes(Inputs.text(body.get("notes"), 500));
         // Support optional date (defaults to today)
         s.setDate(LogDates.resolve(body.get("date")));
         return ResponseEntity.ok(sleepRepository.save(s));

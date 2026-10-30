@@ -40,6 +40,12 @@ public class ExerciseController {
             @RequestHeader("Authorization") String authHeader,
             @RequestBody ExerciseLog log) {
         Long userId = getUserIdFromToken(authHeader);
+        if (log.getExerciseName() == null || log.getExerciseName().isBlank() || log.getExerciseName().length() > 80
+                || log.getDurationMinutes() < 1 || log.getDurationMinutes() > 600
+                || log.getCaloriesBurned() < 0 || log.getCaloriesBurned() > 5000) {
+            throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST);
+        }
+        log.setExerciseName(log.getExerciseName().trim());
         log.setUserId(userId);
         log.setId(null); // never let a client overwrite an existing row
         log.setDate(LogDates.resolve(log.getDate()));

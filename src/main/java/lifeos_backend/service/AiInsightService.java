@@ -36,7 +36,8 @@ public class AiInsightService {
     }
 
     public String getFoodInsight(String foodName) {
-        if (foodName == null || foodName.isBlank()) return "A nutritious choice for your health!";
+        // Returns null when there's no insight (no key, error); callers then store nothing.
+        if (foodName == null || foodName.isBlank() || apiKey == null || apiKey.isBlank()) return null;
         if (foodName.length() > 100) foodName = foodName.substring(0, 100);
         String key = foodName.toLowerCase().trim();
         String cached = cache.get(key);
@@ -65,7 +66,7 @@ public class AiInsightService {
             return insight;
         } catch (Exception e) {
             System.out.println("AI ERROR: " + e.getMessage());
-            return "A nutritious choice for your health!";
+            return null;
         }
     }
 

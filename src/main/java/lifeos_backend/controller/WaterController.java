@@ -1,5 +1,7 @@
 package lifeos_backend.controller;
 
+import lifeos_backend.service.Inputs;
+import java.util.Set;
 import lifeos_backend.service.LogDates;
 import lifeos_backend.model.WaterLog;
 import lifeos_backend.repository.WaterRepository;
@@ -59,9 +61,11 @@ public class WaterController {
     @PostMapping
     public ResponseEntity<WaterLog> log(@RequestHeader("Authorization") String auth,
                                          @RequestBody Map<String, Object> body) {
+        Double oz = Inputs.num(body.get("amountOz"), 1, 128);
+        if (oz == null) return ResponseEntity.badRequest().build();
         WaterLog w = new WaterLog();
         w.setUserId(getUserId(auth));
-        w.setAmountOz(Double.parseDouble(body.get("amountOz").toString()));
+        w.setAmountOz(oz);
         // Support optional date param (for logging on a specific date); defaults to today
         w.setDate(LogDates.resolve(body.get("date")));
         return ResponseEntity.ok(waterRepository.save(w));
