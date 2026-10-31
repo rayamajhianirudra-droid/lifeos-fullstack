@@ -21,6 +21,12 @@ public class FoodLog {
     private String insight;
     private String mealType = "snack";
 
+    // Portion details (nullable: older rows don't have them)
+    private Long fdcId;           // USDA food id, if logged from search
+    private String servingLabel;  // e.g. "1 sandwich (219 g)"
+    private Double quantity;      // how many of servingLabel
+    private Double grams;         // total grams eaten, if known
+
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
     public Long getUserId() { return userId; }
@@ -41,4 +47,12 @@ public class FoodLog {
     public void setInsight(String insight) { this.insight = insight; }
     public String getMealType() { return mealType; }
     public void setMealType(String mealType) { this.mealType = mealType; }
+    public Long getFdcId() { return fdcId; }
+    public void setFdcId(Long fdcId) { this.fdcId = fdcId; }
+    public String getServingLabel() { return servingLabel; }
+    public void setServingLabel(String servingLabel) { this.servingLabel = servingLabel; }
+    public Double getQuantity() { return quantity; }
+    public void setQuantity(Double quantity) { this.quantity = quantity; }
+    public Double getGrams() { return grams; }
+    public void setGrams(Double grams) { this.grams = grams; }
 }
