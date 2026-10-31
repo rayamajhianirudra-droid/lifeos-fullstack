@@ -1,6 +1,9 @@
 package lifeos_backend.service;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpHeaders;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
+import java.nio.charset.StandardCharsets;
 
 import java.util.List;
 import java.util.Map;
@@ -63,5 +66,21 @@ class UsdaFoodServiceTest {
     void dropsFoodsWithNoEnergyOrImpossibleEnergy() {
         assertNull(UsdaFoodService.normalize(Map.of("description", "Mystery", "foodNutrients", List.of(n("203", "G", 5)))));
         assertNull(UsdaFoodService.normalize(Map.of("description", "Bad data", "foodNutrients", List.of(n("208", "KCAL", 4000)))));
+    }
+
+    @Test
+    void extractsUsdaErrorCodeForLogsWithoutLeakingTheKey() {
+        String body = "{\n  \"error\": {\n    \"code\": \"API_KEY_INVALID\",\n    \"message\": \"An invalid api_key was supplied.\"\n  }\n}";
+        var e = WebClientResponseException.create(403, "Forbidden", HttpHeaders.EMPTY,
+                body.getBytes(StandardCharsets.UTF_8), StandardCharsets.UTF_8);
+        assertEquals("API_KEY_INVALID", UsdaFoodService.usdaErrorCode(e));
+        var html = WebClientResponseException.create(400, "Bad Request", HttpHeaders.EMPTY,
+                "<html>400</html>".getBytes(StandardCharsets.UTF_8), StandardCharsets.UTF_8);
+        assertEquals("", UsdaFoodService.usdaErrorCode(html));
+    }
+
+    @Test
+    void searchesAllFourUsdaDataTypes() {
+        assertEquals(List.of("Survey (FNDDS)", "Foundation", "SR Legacy", "Branded"), UsdaFoodService.DATA_TYPES);
     }
 }
