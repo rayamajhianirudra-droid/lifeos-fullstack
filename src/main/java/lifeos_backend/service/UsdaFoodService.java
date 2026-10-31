@@ -1,10 +1,10 @@
 package lifeos_backend.service;
 
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
-import org.springframework.web.util.UriComponentsBuilder;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 
-import java.net.URI;
 import java.time.Duration;
 import java.util.*;
 
@@ -35,7 +35,11 @@ public class UsdaFoodService {
     private final WebClient webClient = WebClient.builder()
             .codecs(c -> c.defaultCodecs().maxInMemorySize(4 * 1024 * 1024))
             .build();
-    private final String apiKey = System.getenv("USDA_API_KEY");
+    /** Trimmed: a stray space or newline pasted into the host's variable makes USDA reject the key. */
+    private final String apiKey = trimOrNull(System.getenv("USDA_API_KEY"));
+
+    /** Data types searched, in USDA's exact spelling. */
+    static final List<String> DATA_TYPES = List.of("Survey (FNDDS)", "Foundation", "SR Legacy", "Branded");
 
     private record CacheEntry(long at, List<Map<String, Object>> foods) {}
 
@@ -66,14 +70,18 @@ public class UsdaFoodService {
             return null;
         }
 
-        URI uri = UriComponentsBuilder.fromUriString(BASE)
-                .queryParam("query", query)                       // encoded properly ("mac & cheese" works)
-                .queryParam("pageSize", 25)
-                .queryParam("dataType", "Survey (FNDDS)", "Foundation", "SR Legacy", "Branded")
-                .encode().build().toUri();
+        // POST with a JSON body (documented FDC endpoint). The GET form needs
+        // "Survey (FNDDS)" in the URL, and USDA's front server answers some
+        // encodings of those parentheses with 400 Bad Request.
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("query", query);
+        body.put("pageSize", 25);
+        body.put("dataType", DATA_TYPES);
         try {
-            Map<String, Object> resp = webClient.get().uri(uri)
+            Map<String, Object> resp = webClient.post().uri(BASE)
                     .header("X-Api-Key", apiKey)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .bodyValue(body)
                     .retrieve().bodyToMono(Map.class).block(TIMEOUT);
             List<Map<String, Object>> raw = resp == null ? List.of()
                     : (List<Map<String, Object>>) resp.getOrDefault("foods", List.of());
@@ -89,10 +97,28 @@ public class UsdaFoodService {
             }
             cache.put(key, new CacheEntry(System.currentTimeMillis(), out));
             return out;
+        } catch (WebClientResponseException e) {
+            // Log USDA's status and error code (e.g. API_KEY_INVALID, OVER_RATE_LIMIT),
+            // never the key or the user's query.
+            System.out.println("FOOD SEARCH ERROR: USDA " + e.getStatusCode().value() + " " + usdaErrorCode(e));
+            return null;
         } catch (Exception e) {
-            System.out.println("FOOD SEARCH ERROR: " + e.getMessage());
+            System.out.println("FOOD SEARCH ERROR: " + e.getClass().getSimpleName() + ": " + e.getMessage());
             return null;
         }
+    }
+
+    private static String trimOrNull(String v) {
+        if (v == null) return null;
+        String t = v.trim();
+        return t.isEmpty() ? null : t;
+    }
+
+    /** Pulls the short error code out of an api.data.gov error body, if present. */
+    static String usdaErrorCode(WebClientResponseException e) {
+        String b = e.getResponseBodyAsString();
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("\"code\"\\s*:\\s*\"([A-Z_]{3,40})\"").matcher(b == null ? "" : b);
+        return m.find() ? m.group(1) : "";
     }
 
     /** Package-private for unit tests. Returns null for foods we can't describe reliably. */
