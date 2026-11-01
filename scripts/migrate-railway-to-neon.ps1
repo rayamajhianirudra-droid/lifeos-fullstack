@@ -54,17 +54,24 @@ $dst = Read-Secret "Paste the Neon connection string"
 if ($dst -match '-pooler\.') { throw "That Neon string uses the pooler host. Turn off 'Connection pooling' and copy it again." }
 if ($dst -notmatch 'sslmode=require') { throw "The Neon string must include sslmode=require." }
 
-function Q([string]$conn, [string]$sql) {
+function Q([string]$conn, [string]$sql, [string]$name) {
     $out = & $psql -X -A -t -v ON_ERROR_STOP=1 -d $conn -c $sql
-    if ($LASTEXITCODE -ne 0) { throw "Query failed: $sql" }
+    if ($LASTEXITCODE -ne 0) {
+        $hint = if ($name -eq 'Railway') {
+            "Check: Postgres > Settings > Networking has public access, any staged change is deployed (Active), and you copied DATABASE_PUBLIC_URL (proxy.rlwy.net), not DATABASE_URL."
+        } else {
+            "Check: you clicked 'Show credentials' before copying (no ****), the host has no -pooler, and there are no quotes or extra characters."
+        }
+        throw "Could not query the $name database (see the psql error above). $hint"
+    }
     return $out
 }
 $tablesSql = "select tablename from pg_tables where schemaname='public' order by 1"
 
 # --- Safety checks ---------------------------------------------------------------
-$srcTables = @(Q $src $tablesSql | Where-Object { $_ })
+$srcTables = @(Q $src $tablesSql "Railway" | Where-Object { $_ })
 if ($srcTables.Count -eq 0) { throw "No tables found in the Railway database. Check the connection string." }
-$dstTables = @(Q $dst $tablesSql | Where-Object { $_ })
+$dstTables = @(Q $dst $tablesSql "Neon" | Where-Object { $_ })
 if ($dstTables.Count -gt 0) {
     throw "The Neon database already has $($dstTables.Count) tables. Use a fresh, empty database (do not start the Render service before this script)."
 }
@@ -85,8 +92,8 @@ try {
     Write-Host ""
     Write-Host ("{0,-28} {1,10} {2,10}" -f 'table', 'railway', 'neon')
     foreach ($t in $srcTables) {
-        $a = [long](Q $src "select count(*) from public.""$t""")
-        $b = [long](Q $dst "select count(*) from public.""$t""")
+        $a = [long](Q $src "select count(*) from public.""$t""" "Railway")
+        $b = [long](Q $dst "select count(*) from public.""$t""" "Neon")
         $flag = if ($a -eq $b) { '' } else { '  <-- MISMATCH'; $bad++ }
         Write-Host ("{0,-28} {1,10} {2,10}{3}" -f $t, $a, $b, $flag)
     }
