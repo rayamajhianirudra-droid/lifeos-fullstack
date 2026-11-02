@@ -24,6 +24,7 @@ public class AiChatController {
     private final UserRepository userRepository;
     private final RateLimiter rateLimiter;
     private final CoachContextService coachContextService;
+    private final lifeos_backend.service.UsageCounters counters;
 
     // Protects the Gemini quota/bill: one account can't burn it for everyone.
     private static final int MAX_CHATS_PER_HOUR = 40;
@@ -34,12 +35,14 @@ public class AiChatController {
                             JwtService jwtService,
                             UserRepository userRepository,
                             RateLimiter rateLimiter,
-                            CoachContextService coachContextService) {
+                            CoachContextService coachContextService,
+                            lifeos_backend.service.UsageCounters counters) {
         this.aiInsightService = aiInsightService;
         this.jwtService = jwtService;
         this.userRepository = userRepository;
         this.rateLimiter = rateLimiter;
         this.coachContextService = coachContextService;
+        this.counters = counters;
     }
 
     private Long getUserIdFromToken(String authHeader) {
@@ -90,6 +93,7 @@ public class AiChatController {
                 context,
                 cleanHistory(request.history)
         );
+        counters.coachMessage(reply != null);
         if (reply == null) {
             // Gemini unavailable: the app shows its built-in coach instead of an error-shaped reply.
             return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(new ChatResponse(null));

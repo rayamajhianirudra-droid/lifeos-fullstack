@@ -1986,3 +1986,21 @@ body.dark .reminder-row{background:rgba(255,255,255,.04);border-color:rgba(255,2
 .nav-item:focus-visible{outline:2px solid var(--color-primary);outline-offset:2px}
 .calorie-ring-text{z-index:1}
 .calorie-ring-num.calorie-ring-num-sm{font-size:20px !important;letter-spacing:-.6px}
+
+/* ── Admin dashboard (owner only) ───────────────────────────── */
+.admin-head{display:flex;justify-content:space-between;align-items:flex-start;gap:var(--space-3);margin-bottom:var(--space-3)}
+.admin-title{font-size:var(--text-xl);font-weight:var(--fw-bold);color:var(--color-ink);margin:0 0 4px}
+.admin-refresh{background:var(--color-primary);color:#fff;border:none;border-radius:var(--radius-md);padding:8px 14px;font-weight:600;cursor:pointer;white-space:nowrap}
+.admin-refresh:disabled{opacity:.6;cursor:default}
+.admin-refresh:focus-visible{outline:2px solid var(--color-primary-muted);outline-offset:2px}
+.admin-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--space-3);margin-bottom:var(--space-3)}
+.admin-tile{background:var(--color-surface);border:.5px solid var(--color-border);border-radius:var(--radius-xl);padding:16px;box-shadow:var(--shadow-xs)}
+.admin-tile-label{font-size:var(--text-xs);color:var(--color-ink-secondary);text-transform:uppercase;letter-spacing:.4px}
+.admin-tile-value{font-size:28px;font-weight:var(--fw-bold);color:var(--color-ink);margin:4px 0 2px}
+.admin-tile-sub{font-size:var(--text-sm);color:var(--color-ink-secondary)}
+.admin-two{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--space-3)}
+.admin-list{display:flex;flex-direction:column}
+.admin-row{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:.5px solid var(--color-border-light);font-size:13px;color:var(--color-ink)}
+.admin-row:last-child{border-bottom:none}
+.admin-food{text-transform:capitalize;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media (max-width:900px){.admin-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.admin-two{grid-template-columns:1fr}}
