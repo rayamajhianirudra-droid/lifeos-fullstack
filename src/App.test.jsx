@@ -1,9 +1,10 @@
+import { describe, test, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import App, { AdminDashboard, fmtBytes, fmtUptime } from './App';
 
 // recharts' ResponsiveContainer needs a real layout engine; jsdom has none.
-jest.mock('recharts', () => {
-  const Original = jest.requireActual('recharts');
+vi.mock('recharts', async () => {
+  const Original = await vi.importActual('recharts');
   return { ...Original, ResponsiveContainer: ({ children }) => <div style={{ width: 600, height: 200 }}>{children}</div> };
 });
 
@@ -57,7 +58,7 @@ describe('admin dashboard', () => {
   });
 
   test('refresh button calls back', () => {
-    const onRefresh = jest.fn();
+    const onRefresh = vi.fn();
     render(<AdminDashboard stats={stats} loading={false} error="" onRefresh={onRefresh} />);
     fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
     expect(onRefresh).toHaveBeenCalledTimes(1);
