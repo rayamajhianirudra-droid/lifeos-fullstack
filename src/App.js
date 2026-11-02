@@ -132,6 +132,136 @@ function BadgeRing({ icon, title, progress, unlocked, color }) {
   );
 }
 
+// ─────────────────────────────────────────────────────────────
+// Admin dashboard (owner only). Shows totals only, never one person's data;
+// the server enforces who can see it, this component just draws it.
+// ─────────────────────────────────────────────────────────────
+const ADMIN_LOG_LABELS = {
+  food_logs: 'Food', water_logs: 'Water', weight_logs: 'Weight', exercise_logs: 'Exercise',
+  sleep_logs: 'Sleep', mood_logs: 'Mood', supplement_logs: 'Supplements', body_fat_logs: 'Body fat',
+};
+const fmtBytes = (b) => (b == null ? '-' : b >= 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.round(b / 1024)} KB`);
+const fmtUptime = (s) => {
+  if (s == null) return '-';
+  const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60);
+  return d > 0 ? `${d}d ${h}h` : h > 0 ? `${h}h ${m}m` : `${m}m`;
+};
+const shortDay = (iso) => { const [, m, d] = iso.split('-'); return `${Number(m)}/${Number(d)}`; };
+
+function AdminTile({ label, value, sub }) {
+  return (
+    <div className="admin-tile">
+      <div className="admin-tile-label">{label}</div>
+      <div className="admin-tile-value">{value}</div>
+      {sub && <div className="admin-tile-sub">{sub}</div>}
+    </div>
+  );
+}
+
+function AdminDashboard({ stats, loading, error, onRefresh }) {
+  if (!stats) {
+    return (
+      <div className="tab-content">
+        <div className="progress-card">{loading ? 'Loading admin stats…' : (error || 'No data yet.')}</div>
+      </div>
+    );
+  }
+  const u = stats.users || {};
+  const usage = stats.usageSinceRestart || {};
+  const sys = stats.system || {};
+  const days = (stats.signupsByDay || []).map((d, i) => {
+    const row = { day: shortDay(d.date), signups: d.count, logs: 0 };
+    Object.keys(stats.logsByDay || {}).forEach(t => { row.logs += stats.logsByDay[t][i]?.count || 0; });
+    return row;
+  });
+  const dbPct = sys.databaseFreeLimitBytes ? Math.round((sys.databaseBytes / sys.databaseFreeLimitBytes) * 100) : null;
+  const heapPct = sys.heapMaxBytes ? Math.round((sys.heapUsedBytes / sys.heapMaxBytes) * 100) : null;
+  const totals = stats.logTotals || {};
+
+  return (
+    <div className="tab-content">
+      <div className="admin-head">
+        <div>
+          <h2 className="admin-title">Admin dashboard</h2>
+          <p className="tab-sub-label">Totals only. No names, emails or individual logs are shown here.</p>
+        </div>
+        <button type="button" className="admin-refresh" onClick={onRefresh} disabled={loading}>
+          {loading ? 'Refreshing…' : 'Refresh'}
+        </button>
+      </div>
+      {error && <div className="form-error" role="alert">{error}</div>}
+
+      <div className="admin-grid">
+        <AdminTile label="Total users" value={u.total ?? 0} sub={`${u.newLast7Days ?? 0} new this week`} />
+        <AdminTile label="Active today" value={u.activeToday ?? 0} sub="logged anything" />
+        <AdminTile label="Active 7 days" value={u.activeLast7Days ?? 0} sub={`${u.activeLast30Days ?? 0} in 30 days`} />
+        <AdminTile label="New in 30 days" value={u.newLast30Days ?? 0} sub="sign-ups" />
+      </div>
+
+      <div className="progress-card">
+        <h3>Last 30 days</h3>
+        <p className="tab-sub-label"><span style={{ color: '#5B4FD4' }}>●</span> Entries logged &nbsp; <span style={{ color: '#1D9E75' }}>●</span> Sign-ups</p>
+        <div style={{ width: '100%', height: 220 }}>
+          <ResponsiveContainer>
+            <AreaChart data={days} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
+              <XAxis dataKey="day" tick={{ fontSize: 11 }} interval={4} />
+              <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+              <Tooltip contentStyle={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)', borderRadius: 8, color: 'var(--color-ink)' }} />
+              <Area type="monotone" dataKey="logs" name="Entries logged" stroke="#5B4FD4" fill="#5B4FD4" fillOpacity={0.15} />
+              <Area type="monotone" dataKey="signups" name="Sign-ups" stroke="#1D9E75" fill="#1D9E75" fillOpacity={0.2} />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      <div className="admin-two">
+        <div className="progress-card">
+          <h3>Entries by type (all time)</h3>
+          <div className="admin-list">
+            {Object.keys(ADMIN_LOG_LABELS).map(t => (
+              <div key={t} className="admin-row"><span>{ADMIN_LOG_LABELS[t]}</span><strong>{totals[t] ?? 0}</strong></div>
+            ))}
+          </div>
+        </div>
+        <div className="progress-card">
+          <h3>Popular foods</h3>
+          {(stats.popularFoods || []).length === 0
+            ? <p className="tab-sub-label">Appears once a food is logged by at least {stats.popularFoodsMinPeople} different people.</p>
+            : <div className="admin-list">
+                {stats.popularFoods.map(f => (
+                  <div key={f.food} className="admin-row"><span className="admin-food">{f.food}</span><strong>{f.logs}</strong></div>
+                ))}
+              </div>}
+        </div>
+      </div>
+
+      <div className="admin-two">
+        <div className="progress-card">
+          <h3>Usage since last restart</h3>
+          <div className="admin-list">
+            <div className="admin-row"><span>Food searches</span><strong>{usage.foodSearches ?? 0}</strong></div>
+            <div className="admin-row"><span>Searches that failed</span><strong>{usage.foodSearchFailures ?? 0}</strong></div>
+            <div className="admin-row"><span>AI coach messages</span><strong>{usage.coachMessages ?? 0}</strong></div>
+            <div className="admin-row"><span>AI unavailable (built-in reply)</span><strong>{usage.coachFallbacks ?? 0}</strong></div>
+          </div>
+          <p className="tab-sub-label">Counts reset when the server restarts or redeploys.</p>
+        </div>
+        <div className="progress-card">
+          <h3>System</h3>
+          <div className="admin-list">
+            <div className="admin-row"><span>Database size</span><strong>{fmtBytes(sys.databaseBytes)}{dbPct != null ? ` (${dbPct}% of free plan)` : ''}</strong></div>
+            <div className="admin-row"><span>Server memory</span><strong>{fmtBytes(sys.heapUsedBytes)} / {fmtBytes(sys.heapMaxBytes)}{heapPct != null ? ` (${heapPct}%)` : ''}</strong></div>
+            <div className="admin-row"><span>Up since restart</span><strong>{fmtUptime(sys.uptimeSeconds)}</strong></div>
+            <div className="admin-row"><span>Java</span><strong>{sys.javaVersion || '-'}</strong></div>
+          </div>
+          {dbPct != null && dbPct >= 80 && <div className="form-error">Database is above 80% of Neon's free storage. Time to upgrade.</div>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function App() {
   const [token, setToken] = useState(localStorage.getItem('token'));
   const [currentUser, setCurrentUser] = useState(localStorage.getItem('userName'));
@@ -188,6 +318,11 @@ function App() {
   const [profileSaved, setProfileSaved] = useState(false);
   // --- Supplement Tracker ---
   const [supplementLogs, setSupplementLogs] = useState([]);
+  // Admin dashboard (only shown when the server says this account is an admin)
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [adminStats, setAdminStats] = useState(null);
+  const [adminLoading, setAdminLoading] = useState(false);
+  const [adminError, setAdminError] = useState('');
   const [suppName, setSuppName] = useState('');
   const [suppDosage, setSuppDosage] = useState('');
   const [suppUnit, setSuppUnit] = useState('mg');
@@ -280,6 +415,7 @@ function App() {
       fetchDailyHistory();
       fetchWater(selectedDate);
       fetchProfile();
+      fetchAdminStats();
     }
   }, [token]); // eslint-disable-line
 
@@ -766,12 +902,28 @@ function App() {
     setWater(0); setWaterLogs([]); setDailyHistory([]); setBodyFatLogs([]);
     setSleepLogs([]); setMoodLogs([]); setSupplementLogs([]); setCustomFoods([]);
     setToken(null); setCurrentUser(null);
+    setIsAdmin(false); setAdminStats(null); setAdminError('');
     setFoodLogs([]); setStreak(0); setWeightLogs([]);
     setExerciseLogs([]); setTotalBurned(0);
     setChatHistory([]);
   };
 
   // Profile is saved to the account so it survives cleared browsers and other devices.
+  // The server decides who is an admin (ADMIN_EMAILS on the backend). Anyone else
+  // gets 404, so for normal users this quietly does nothing and no Admin tab appears.
+  const fetchAdminStats = async (showErrors = false) => {
+    setAdminLoading(true); setAdminError('');
+    try {
+      const res = await axios.get(`${API}/admin/stats`, { headers: { Authorization: `Bearer ${token}` } });
+      setAdminStats(res.data); setIsAdmin(true);
+    } catch (err) {
+      const status = err.response?.status;
+      if (status === 404) { setIsAdmin(false); setAdminStats(null); }
+      else if (showErrors) setAdminError(status === 429 ? 'Too many refreshes. Wait a minute.' : 'Could not load admin stats.');
+    }
+    setAdminLoading(false);
+  };
+
   const fetchProfile = async () => {
     try {
       const res = await axios.get(`${API}/profile`, { headers: { Authorization: `Bearer ${token}` } });
@@ -1365,6 +1517,14 @@ function App() {
           onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setActiveTab('profile'); } }}>
           Profile
         </div>
+        {isAdmin && (
+          <div className={`nav-item ${activeTab === 'admin' ? 'active' : ''}`} role="button" tabIndex={0}
+            aria-current={activeTab === 'admin' ? 'page' : undefined}
+            onClick={() => { setActiveTab('admin'); fetchAdminStats(true); }}
+            onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setActiveTab('admin'); fetchAdminStats(true); } }}>
+            Admin
+          </div>
+        )}
 
         <div className="sidebar-bottom">
           <div className="score-card">
@@ -2494,6 +2654,11 @@ function App() {
         )}
 
         {/* PROFILE */}
+        {activeTab === 'admin' && isAdmin && (
+          <AdminDashboard stats={adminStats} loading={adminLoading} error={adminError}
+            onRefresh={() => fetchAdminStats(true)} />
+        )}
+
         {activeTab === 'profile' && (
           <div className="tab-content">
             <div className="profile-card">
@@ -2796,9 +2961,10 @@ function App() {
           {id:'sleep',icon:'😴',label:'Sleep'},
           {id:'mood',icon:'😊',label:'Mood'},
           {id:'supplements',icon:'💊',label:'Supplements'},
+          ...(isAdmin ? [{id:'admin',icon:'🛠️',label:'Admin'}] : []),
         ].map(item=>(
           <button key={item.id} className={`bottomnav-btn ${activeTab===item.id?'bottomnav-active':''}`}
-            onClick={()=>setActiveTab(item.id)}>
+            onClick={()=>{ setActiveTab(item.id); if (item.id === 'admin') fetchAdminStats(true); }}>
             <span>{item.icon}</span>
             <span>{item.label}</span>
           </button>

@@ -43,3 +43,6 @@ services:
         sync: false
       - key: USDA_API_KEY
         sync: false
+      # Comma-separated emails allowed to open the admin dashboard (totals only).
+      - key: ADMIN_EMAILS
+        sync: false

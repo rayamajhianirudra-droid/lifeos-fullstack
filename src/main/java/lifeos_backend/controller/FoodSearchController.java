@@ -3,6 +3,7 @@ package lifeos_backend.controller;
 import lifeos_backend.repository.UserRepository;
 import lifeos_backend.service.JwtService;
 import lifeos_backend.service.RateLimiter;
+import lifeos_backend.service.UsageCounters;
 import lifeos_backend.service.UsdaFoodService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -22,13 +23,16 @@ public class FoodSearchController {
     private final JwtService jwtService;
     private final UserRepository userRepository;
     private final RateLimiter rateLimiter;
+    private final UsageCounters counters;
 
     public FoodSearchController(UsdaFoodService usda, JwtService jwtService,
-                                UserRepository userRepository, RateLimiter rateLimiter) {
+                                UserRepository userRepository, RateLimiter rateLimiter,
+                                UsageCounters counters) {
         this.usda = usda;
         this.jwtService = jwtService;
         this.userRepository = userRepository;
         this.rateLimiter = rateLimiter;
+        this.counters = counters;
     }
 
     /** GET /api/foods/search?q=big mac  ->  normalized foods with per-100 g nutrients and real portions. */
@@ -42,6 +46,7 @@ public class FoodSearchController {
                     .body(Map.of("error", "Too many searches. Please wait a minute."));
         }
         List<Map<String, Object>> foods = usda.search(q);
+        counters.foodSearch(foods != null);
         if (foods == null) {
             return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
                     .body(Map.of("error", "Food search is temporarily unavailable."));
