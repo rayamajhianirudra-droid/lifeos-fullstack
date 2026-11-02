@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, ReferenceLine } from 'recharts';
 import './App.css';
 
-const API = process.env.REACT_APP_API_URL || 'http://localhost:8080/api';
+const API = import.meta.env.REACT_APP_API_URL || 'http://localhost:8080/api';
 
 // Calendar dates in the user's LOCAL time zone (YYYY-MM-DD).
 // Using UTC here made the app's "day" end at 7 pm in Chicago.
@@ -23,8 +23,8 @@ const shortDate = (iso) => iso ? parseLocalISO(String(iso).slice(0, 10)).toLocal
 // renders its designed gradient scene, so nothing can ever show a broken image.
 // (Unsplash Source, which the original spec used, was shut down in 2024; it also
 // would have sent users' food names to a third party.)
-const DASH_PHOTOS = process.env.REACT_APP_DASH_PHOTOS === 'true';
-const dashPhoto = (theme) => (DASH_PHOTOS ? `${process.env.PUBLIC_URL || ''}/images/dash/${theme}.jpg` : null);
+const DASH_PHOTOS = import.meta.env.REACT_APP_DASH_PHOTOS === 'true';
+const dashPhoto = (theme) => (DASH_PHOTOS ? `${import.meta.env.BASE_URL.replace(/\/$/, '')}/images/dash/${theme}.jpg` : null);
 
 const EXERCISE_THEMES = {
   cardio: 'run', strength: 'gym', hiit: 'hiit', yoga: 'yoga',
@@ -449,7 +449,7 @@ function App() {
       // Never prompt on login: browsers penalize unprompted permission requests and users
       // deny them. We only subscribe once the user has turned reminders on themselves.
       if (Notification.permission !== 'granted') return;
-      if (!process.env.REACT_APP_VAPID_KEY) return;
+      if (!import.meta.env.REACT_APP_VAPID_KEY) return;
 
       const userId = getUserIdFromToken(token);
       if (!userId) {
@@ -463,7 +463,7 @@ function App() {
         const subscription = existing || await registration.pushManager.subscribe({
           userVisibleOnly: true,
           applicationServerKey: urlBase64ToUint8Array(
-            process.env.REACT_APP_VAPID_KEY || ''
+            import.meta.env.REACT_APP_VAPID_KEY || ''
           ),
         });
 
@@ -481,7 +481,7 @@ function App() {
     };
 
     subscribeToPush();
-  }, [token]); // eslint-disable-line
+  }, [token]);
   // MEAL REMINDERS
   useEffect(() => {
     if (!token) return;
@@ -586,7 +586,7 @@ function App() {
       setWeightLbs('');
       fetchWeightLogs();
       fetchProfile();   // the server updates the profile weight, which drives your goals
-    } catch (err) { setMessage('❌ Enter a weight between 50 and 1000 lbs.'); }
+    } catch { setMessage('❌ Enter a weight between 50 and 1000 lbs.'); }
   };
 
   const deleteWeight = async (id) => {
@@ -704,7 +704,7 @@ function App() {
       }, { headers: { Authorization: `Bearer ${token}` } });
       const reply = res.data.response || generateSmartFallback(userMsg);
       setChatHistory([...newHistory, { role: 'ai', text: reply }]);
-    } catch (err) {
+    } catch {
       setChatHistory([...newHistory, { role: 'ai', text: generateSmartFallback(userMsg) }]);
     }
     setAiLoading(false);
@@ -779,7 +779,7 @@ function App() {
       } catch { /* storage blocked: nothing to migrate */ }
       setWaterLogs(logs);
       setWater(count);
-    } catch (e) { /* keep showing the last known value */ }
+    } catch { /* keep showing the last known value */ }
   };
 
   // Accepts a number or an updater function, like setState. Saves to the server.
@@ -800,7 +800,7 @@ function App() {
         const newestFirst = [...waterLogs].sort((a, b) => b.id - a.id).slice(0, before - target);
         for (const w of newestFirst) await axios.delete(`${API}/water/${w.id}`, { headers });
       }
-    } catch (e) {
+    } catch {
       setMessage('❌ Could not save water. Check your connection.');
     }
     await fetchWater(selectedDate);
@@ -874,7 +874,7 @@ function App() {
       await axios.post(`${API}/auth/forgot-password`, { email: authEmail });
       setResetMessage('✅ Reset token sent to your email!');
       setResetStep(2);
-    } catch (err) { setResetMessage('❌ Something went wrong. Try again.'); }
+    } catch { setResetMessage('❌ Something went wrong. Try again.'); }
   };
 
   const handleResetPassword = async () => {
@@ -891,7 +891,7 @@ function App() {
         setAuthMode('login'); setResetStep(1);
         setResetToken(''); setNewPassword(''); setResetMessage('');
       }, 2000);
-    } catch (err) { setResetMessage('❌ Invalid or expired token.'); }
+    } catch { setResetMessage('❌ Invalid or expired token.'); }
   };
 
   const logout = () => {
@@ -934,7 +934,7 @@ function App() {
         setProfile(next);
         try { localStorage.setItem('profile', JSON.stringify(next)); } catch { /* ignore */ }
       }
-    } catch (e) { /* offline: keep the cached profile */ }
+    } catch { /* offline: keep the cached profile */ }
   };
 
   const [profileError, setProfileError] = useState('');
@@ -1014,7 +1014,7 @@ function App() {
           console.log('Threshold check failed:', err);
         });
       }
-    } catch (err) { setMessage('❌ Error logging food.'); }
+    } catch { setMessage('❌ Error logging food.'); }
   };
 
   const deleteFood = async (id) => {
@@ -1023,7 +1023,7 @@ function App() {
         headers: { Authorization: `Bearer ${token}` }
       });
       fetchFoodLogs(selectedDate); fetchStreak(); fetchDailyHistory();
-    } catch (err) { setMessage('❌ Error deleting food.'); }
+    } catch { setMessage('❌ Error deleting food.'); }
   };
 
   const totalCalories = Math.round(foodLogs.reduce((sum, f) => sum + f.calories, 0));
@@ -1215,7 +1215,7 @@ function App() {
     try {
       const res = await axios.get(`${API}/supplements`, { headers: { Authorization: `Bearer ${token}` } });
       setSupplementLogs(res.data);
-    } catch(e) {}
+    } catch { /* list stays as it was; the next load retries */ }
   };
   const logSupplement = async () => {
     if (!suppName.trim()) return setSuppMsg('Enter supplement name');
@@ -1226,7 +1226,7 @@ function App() {
       setSuppName(''); setSuppDosage(''); setSuppMsg('✅ Logged!');
       fetchSupplements();
       setTimeout(() => setSuppMsg(''), 2000);
-    } catch(e) { setSuppMsg('Error logging supplement'); }
+    } catch { setSuppMsg('Error logging supplement'); }
   };
   const deleteSupplement = async (id) => {
     await axios.delete(`${API}/supplements/${id}`, { headers: { Authorization: `Bearer ${token}` } });
@@ -1240,7 +1240,7 @@ function App() {
       const url = date ? `${API}/sleep?date=${encodeURIComponent(date)}` : `${API}/sleep`;
       const res = await axios.get(url, { headers: { Authorization: `Bearer ${token}` } });
       setSleepLogs(res.data);
-    } catch(e) {}
+    } catch { /* list stays as it was; the next load retries */ }
   };
   const logSleep = async () => {
     if (!sleepHours) return setSleepMsg('Enter hours slept');
@@ -1253,7 +1253,7 @@ function App() {
       setSleepMsg('✅ Sleep logged!');
       fetchSleep();
       setTimeout(() => setSleepMsg(''), 2000);
-    } catch(e) { setSleepMsg('Error logging sleep'); }
+    } catch { setSleepMsg('Error logging sleep'); }
   };
   const deleteSleep = async (id) => {
     await axios.delete(`${API}/sleep/${id}`, { headers: { Authorization: `Bearer ${token}` } });
@@ -1266,7 +1266,7 @@ function App() {
     try {
       const res = await axios.get(`${API}/mood`, { headers: { Authorization: `Bearer ${token}` } });
       setMoodLogs(res.data);
-    } catch(e) {}
+    } catch { /* list stays as it was; the next load retries */ }
   };
   const logMood = async () => {
     const labels = ['', 'Awful', 'Bad', 'Meh', 'Okay', 'Fine', 'Good', 'Great', 'Amazing', 'Fantastic', 'Perfect'];
@@ -1278,7 +1278,7 @@ function App() {
       setMoodNotes(''); setMoodMsg('✅ Mood logged!');
       fetchMood();
       setTimeout(() => setMoodMsg(''), 2000);
-    } catch(e) { setMoodMsg('Error logging mood'); }
+    } catch { setMoodMsg('Error logging mood'); }
   };
   const deleteMood = async (id) => {
     await axios.delete(`${API}/mood/${id}`, { headers: { Authorization: `Bearer ${token}` } });
@@ -1291,7 +1291,7 @@ function App() {
     try {
       const res = await axios.get(`${API}/custom-foods`, { headers: { Authorization: `Bearer ${token}` } });
       setCustomFoods(res.data);
-    } catch(e) {}
+    } catch { /* list stays as it was; the next load retries */ }
   };
   const saveCustomFood = async () => {
     if (!customFoodName.trim() || !customFoodCal) return setCustomFoodMsg('Enter name and calories');
@@ -1309,7 +1309,7 @@ function App() {
       setCustomFoodMsg('✅ Saved!'); setShowCustomForm(false);
       fetchCustomFoods();
       setTimeout(() => setCustomFoodMsg(''), 2000);
-    } catch(e) { setCustomFoodMsg('Error saving food'); }
+    } catch { setCustomFoodMsg('Error saving food'); }
   };
   const logCustomFood = async (cf) => {
     try {
@@ -1318,7 +1318,7 @@ function App() {
       setMessage(`✅ ${cf.foodName} logged!`);
       fetchFoodLogs(selectedDate);
       setTimeout(() => setMessage(''), 2000);
-    } catch(e) {}
+    } catch { setMessage('❌ Could not log that food. Please try again.'); }
   };
   const deleteCustomFood = async (id) => {
     await axios.delete(`${API}/custom-foods/${id}`, { headers: { Authorization: `Bearer ${token}` } });

@@ -39,12 +39,13 @@ Frontend and backend live in this one repository:
 
 | Path | What |
 |---|---|
-| `src/App.js`, `src/App.css`, `public/` | React frontend (Create React App) |
+| `index.html`, `src/App.jsx`, `src/App.css`, `public/` | React frontend (Vite) |
 | `src/main/java/lifeos_backend/` | Spring Boot backend: `controller/`, `service/`, `model/`, `repository/` |
 | `src/test/java/lifeos_backend/` | Backend tests (JUnit 5, Mockito) |
-| `src/App.test.js` | Frontend tests (Jest, React Testing Library) |
+| `src/App.test.jsx` | Frontend tests (Vitest, React Testing Library) |
 | `Dockerfile`, `render.yaml` | Backend container and Render blueprint |
-| `.github/workflows/ci.yml` | CI: backend tests on Postgres, Docker smoke test, frontend tests and build |
+| `vite.config.js`, `eslint.config.js`, `vercel.json` | Frontend build, lint rules, Vercel settings and security headers |
+| `.github/workflows/ci.yml` | CI: backend tests on Postgres, Docker smoke test, frontend lint, tests and build |
 | `docs/` | Deployment runbook, admin dashboard notes |
 | `scripts/` | One-off maintenance scripts (database migration) |
 
@@ -52,7 +53,7 @@ Frontend and backend live in this one repository:
 
 - **Backend**: Java 21, Spring Boot 4, Spring Security, Spring Data JPA (Hibernate 7), jjwt
 - **Database**: PostgreSQL 18
-- **Frontend**: React 19, Recharts, Axios
+- **Frontend**: React 19, Vite, Recharts, Axios, Vitest, ESLint
 - **Hosting**: Render (backend), Neon (database), Vercel (frontend), UptimeRobot (monitoring)
 - **CI**: GitHub Actions
 
@@ -73,7 +74,7 @@ Found a security issue? Please email the maintainer instead of opening a public 
 
 ## Running locally
 
-Requirements: Java 21, Maven (or the included `mvnw`), Node 20, PostgreSQL.
+Requirements: Java 21, Maven (or the included `mvnw`), Node 22 (20.19 or newer), PostgreSQL.
 
 **Backend** (port 8080)
 
@@ -94,14 +95,18 @@ The local database URL, user and password default to `localhost:5432/lifeos_db`
 
 ```bash
 npm ci
-REACT_APP_API_URL=http://localhost:8080/api npm start
+REACT_APP_API_URL=http://localhost:8080/api npm run dev
 ```
+
+Only variables starting with `VITE_` or `REACT_APP_` are built into the
+browser bundle, so backend secrets can't end up there by accident.
 
 ## Tests
 
 ```bash
 ./mvnw test                       # backend; needs a running Postgres and JWT_SECRET (see ci.yml)
-npm test -- --watchAll=false      # frontend
+npm test                          # frontend (Vitest)
+npm run lint                      # frontend lint, warnings fail
 ```
 
 CI runs both on every pull request, plus a Docker build that boots the backend
