@@ -1,8 +1,9 @@
-const CACHE_NAME = 'lifeos-v1';
+// Bump the version whenever the caching rules change so old caches are dropped.
+const CACHE_NAME = 'lifeos-v2';
+// Only files that exist in every build. Built JS/CSS have hashed names, so they
+// are cached on first use by the fetch handler instead of listed here. (v1 listed
+// /static/js/bundle.js, which only exists in dev, so install always failed.)
 const urlsToCache = [
-  '/',
-  '/static/js/bundle.js',
-  '/static/css/main.css',
   '/manifest.json',
   '/favicon.ico',
   '/logo192.png',
@@ -12,7 +13,6 @@ const urlsToCache = [
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME).then(cache => {
-      console.log('LifeOS PWA: Caching app shell');
       return cache.addAll(urlsToCache);
     })
   );
@@ -42,10 +42,15 @@ self.addEventListener('fetch', event => {
     return;
   }
 
+  // Only GET requests for static files are cached. Pages (HTML) are never cached,
+  // so users always get the newest deploy; cached files are an offline fallback.
+  if (event.request.method !== 'GET') return;
+
   event.respondWith(
     fetch(event.request)
       .then(response => {
-        if (!response || response.status !== 200 || response.type !== 'basic') {
+        if (!response || response.status !== 200 || response.type !== 'basic' ||
+            event.request.mode === 'navigate') {
           return response;
         }
         const responseToCache = response.clone();

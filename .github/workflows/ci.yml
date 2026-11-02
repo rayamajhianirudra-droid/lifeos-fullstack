@@ -86,7 +86,7 @@ jobs:
         run: docker logs lifeos 2>&1 | tail -60
 
   frontend-build:
-    name: Frontend build (same as Vercel)
+    name: Frontend tests + build (same as Vercel)
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -96,6 +96,10 @@ jobs:
           node-version: "20"
           cache: npm
       - run: npm ci --no-audit --no-fund
+      - name: Frontend tests
+        run: npm test -- --watchAll=false
+        env:
+          CI: "true"
       - name: Build (lint warnings fail, like Vercel)
         run: npm run build
         env:

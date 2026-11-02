@@ -83,7 +83,13 @@
     </style>
   </head>
   <body>
-    <noscript>You need to enable JavaScript to run LifeOS Health.</noscript>
+    <noscript>
+      <main style="max-width:640px;margin:48px auto;padding:0 20px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#0A0A14">
+        <h1>LifeOS Health</h1>
+        <p>Track food with real USDA nutrition data, water, weight, body fat, sleep, mood, exercise and supplements, and get guidance from an AI coach.</p>
+        <p>LifeOS needs JavaScript to run. Please enable it in your browser settings and reload this page.</p>
+      </main>
+    </noscript>
 
     <!-- LOADING SCREEN -->
     <div id="loading">
@@ -93,7 +99,13 @@
       <div class="spinner"></div>
     </div>
 
-    <div id="root"></div>
+    <div id="root">
+      <!-- Replaced by the app as soon as it loads; read by search engines and link previews. -->
+      <main style="position:absolute;left:-9999px">
+        <h1>LifeOS Health: nutrition and fitness tracker with an AI coach</h1>
+        <p>Log meals with real USDA nutrition data and portion sizes, track water, weight, body fat, sleep, mood, workouts and supplements, see your progress over time, and ask an AI coach for advice based on your own logs.</p>
+      </main>
+    </div>
 
     <script>
       // Hide loading screen when React loads
