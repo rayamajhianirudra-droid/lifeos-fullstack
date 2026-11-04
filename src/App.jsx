@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import axios from 'axios';
 import { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, ReferenceLine } from 'recharts';
 import './App.css';
 import './AppShell.css';
 import Dashboard from './dashboard/Dashboard';
 import Icon from './components/Icon';
+import FoodThumb from './components/FoodThumb';
 
 const API = import.meta.env.REACT_APP_API_URL || 'http://localhost:8080/api';
 
@@ -147,6 +148,9 @@ function AdminDashboard({ stats, loading, error, onRefresh }) {
   );
 }
 
+// Branded foods share a photo per barcode, everything else per name.
+const photoKey = (food) => (food.upc ? `upc:${food.upc}` : food.name);
+
 function App() {
   const [token, setToken] = useState(localStorage.getItem('token'));
   const [currentUser, setCurrentUser] = useState(localStorage.getItem('userName'));
@@ -161,6 +165,9 @@ function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [searching, setSearching] = useState(false);
+  // Food photos by key (see photoKey), loaded from our server after results show.
+  const [foodPhotos, setFoodPhotos] = useState({});
+  const photoAsked = useRef(new Set());
   // Portion picker for a chosen search result: { food, portionIdx, qty }
   const [picked, setPicked] = useState(null);
   const [message, setMessage] = useState('');
@@ -886,6 +893,11 @@ function App() {
         fdcId: food.fdcId, servingLabel: food.servingLabel, quantity: food.quantity, grams: food.grams,
       }, { headers: { Authorization: `Bearer ${token}` } });
       setMessage('✅ ' + food.name.substring(0, 40) + ' logged!');
+      if (food.photo) {
+        // Show the same photo in the log right away (logged foods are keyed by name).
+        photoAsked.current.add(food.name);
+        setFoodPhotos(prev => ({ ...prev, [food.name]: food.photo }));
+      }
       setSearchQuery(''); setSearchResults([]); setPicked(null);
       fetchFoodLogs(selectedDate); fetchStreak(); fetchDailyHistory();
       setTimeout(() => fetchFoodLogs(selectedDate), 4000);
@@ -1221,6 +1233,39 @@ function App() {
     }
   // eslint-disable-next-line
   }, [token]);
+
+  // Food photos: ask our server once per food per session. The server looks up a few
+  // new foods per call, so anything still missing is asked for once more shortly after.
+  const loadFoodPhotos = useCallback(async (items, retry = true) => {
+    if (!token) return;
+    const seen = new Set();
+    const todo = items.filter(i => i.id && i.name && !photoAsked.current.has(i.id) && !seen.has(i.id) && seen.add(i.id)).slice(0, 30);
+    if (todo.length === 0) return;
+    todo.forEach(i => photoAsked.current.add(i.id));
+    let found = {};
+    try {
+      const res = await axios.post(`${API}/foods/images`, { items: todo }, { headers: { Authorization: `Bearer ${token}` } });
+      if (res.data && typeof res.data === 'object' && !Array.isArray(res.data)) found = res.data;
+      setFoodPhotos(prev => ({ ...prev, ...found }));
+    } catch {
+      // Photos are decoration: on any error the plate icon stays.
+    }
+    const missing = todo.filter(i => !found[i.id]);
+    if (retry && missing.length > 0) {
+      setTimeout(() => {
+        missing.forEach(i => photoAsked.current.delete(i.id));
+        loadFoodPhotos(missing, false);
+      }, 2500);
+    }
+  }, [token]);
+
+  useEffect(() => {
+    if (searchResults.length) loadFoodPhotos(searchResults.map(f => ({ id: photoKey(f), name: f.name, upc: f.upc || null })));
+  }, [searchResults, loadFoodPhotos]);
+
+  useEffect(() => {
+    if (foodLogs.length) loadFoodPhotos(foodLogs.map(f => ({ id: f.foodName, name: f.foodName })));
+  }, [foodLogs, loadFoodPhotos]);
 
   // --- Dashboard derived values ---
   const sameDay = (d) => d != null && String(d).slice(0, 10) === selectedDate;
@@ -1617,6 +1662,7 @@ function App() {
               weight: latestWeight, bodyFat: latestBodyFat,
               bmi, bmiLabel, bmiTone,
               foodLogs,
+              foodPhotos,
               isToday, dateLabel: formatDateLabel(selectedDate),
               dateShort: new Date(`${selectedDate}T12:00:00`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
               coachText: dashCoachText,
@@ -1661,6 +1707,7 @@ function App() {
                     return (
                       <div key={food.fdcId} className={`result-item ${isOpen ? 'result-item-open' : ''}`}>
                         <div className="result-main">
+                          <FoodThumb photo={foodPhotos[photoKey(food)]} size={46} />
                           <div className="result-left">
                             <p className="result-name">{food.name}</p>
                             <p className="result-macros">
@@ -1704,6 +1751,7 @@ function App() {
                                   name: food.brand ? `${food.name} (${food.brand})` : food.name,
                                   calories: pm.calories, protein: pm.protein, carbs: pm.carbs, fat: pm.fat,
                                   fdcId: food.fdcId, servingLabel: portion.label, quantity: qtyNum, grams: pm.grams,
+                                  photo: foodPhotos[photoKey(food)],
                                 })}>
                                 Log to {mealCategories.find(c => c.key === mealType)?.label.replace(/^\S+\s/, '') || 'meal'}
                               </button>
@@ -1713,7 +1761,9 @@ function App() {
                       </div>
                     );
                   })}
-                  <p className="result-source">Nutrition data: USDA FoodData Central</p>
+                  <p className="result-source">
+                    Nutrition data: USDA FoodData Central · Photos: <a href="https://www.pexels.com" target="_blank" rel="noopener noreferrer">Pexels</a> and <a href="https://world.openfoodfacts.org" target="_blank" rel="noopener noreferrer">Open Food Facts</a>
+                  </p>
                 </div>
               )}
             </div>
@@ -1792,7 +1842,7 @@ function App() {
                       </div>
                       {items.map(f => (
                         <div key={f.id} className="food-item">
-                          <div className="food-meal-dot" style={{background:cat.color}}/>
+                          <FoodThumb photo={foodPhotos[f.foodName]} size={40} />
                           <div style={{flex:1,minWidth:0}}>
                             <p className="food-item-name">{f.foodName}</p>
                             <p className="food-item-macros">{f.servingLabel ? `${f.quantity && f.quantity !== 1 ? `${f.quantity} × ` : ""}${f.servingLabel} · ` : ""}{Math.round(f.protein*10)/10}g P · {Math.round(f.carbs*10)/10}g C · {Math.round(f.fat*10)/10}g F</p>

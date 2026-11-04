@@ -12,6 +12,9 @@ and ask an AI coach for advice that is based on their own logs.
 
 - **Food logging** backed by USDA FoodData Central: server-side search, real
   serving sizes (for example 1 sandwich, 1 medium banana) and per-portion macros.
+- **Food photos** in search, the log and the dashboard: package photos from Open
+  Food Facts for branded foods, Pexels photos for the rest, cached on the server
+  ([docs/food-photos.md](docs/food-photos.md)).
 - **Daily targets**: calorie goal from the Mifflin-St Jeor equation with safe
   minimums, protein goal from body weight, water goal.
 - **Body tracking**: weight history, body fat (US Navy method), BMI.
@@ -31,6 +34,7 @@ Browser (React SPA, Vercel)
 api.lifeoshealth.com  (Spring Boot in Docker, Render)
    |-- PostgreSQL (Neon, serverless)
    |-- USDA FoodData Central API (food search)
+   |-- Open Food Facts + Pexels (food photos, cached in Postgres)
    |-- Google Gemini API (AI coach, food insights)
    '-- Resend API (password reset email)
 ```
@@ -84,6 +88,7 @@ export JWT_SECRET="$(openssl rand -base64 48)"   # at least 32 bytes
 export RESEND_API_KEY=dev-placeholder            # real key only needed for reset emails
 export USDA_API_KEY=your-key                     # free at https://fdc.nal.usda.gov/api-key-signup
 export GEMINI_API_KEY=your-key                   # optional; the built-in coach works without it
+export PEXELS_API_KEY=your-key                   # optional; food photos for plain foods (https://www.pexels.com/api/)
 ./mvnw spring-boot:run
 ```
 
@@ -123,4 +128,4 @@ rollback plan are in [docs/deploy-render-neon.md](docs/deploy-render-neon.md).
 
 Copyright (c) 2026 Anirudra Rayamajhi. All rights reserved. The source is
 visible for review and learning; it may not be copied, redistributed or used
-to run another service without written permission.
+to run another service without written permission. See [LICENSE](LICENSE).
