@@ -2,6 +2,9 @@ import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, ReferenceLine } from 'recharts';
 import './App.css';
+import './AppShell.css';
+import Dashboard from './dashboard/Dashboard';
+import Icon from './components/Icon';
 
 const API = import.meta.env.REACT_APP_API_URL || 'http://localhost:8080/api';
 
@@ -13,124 +16,6 @@ const parseLocalISO = (s) => { const [y, m, d] = s.split('-').map(Number); retur
 // "2026-10-27" -> "Oct 27". new Date("2026-10-27") is UTC midnight, which showed the
 // PREVIOUS day everywhere in the US; parse it as a local calendar date instead.
 const shortDate = (iso) => iso ? parseLocalISO(String(iso).slice(0, 10)).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
-
-// ─────────────────────────────────────────────────────────────
-// LifeOS 3.0 dashboard visuals (module-level, no extra deps)
-// ─────────────────────────────────────────────────────────────
-
-// Optional local photography. Drop JPGs into public/images/dash/<theme>.jpg and set
-// REACT_APP_DASH_PHOTOS=true. Until then no image requests are made and every card
-// renders its designed gradient scene, so nothing can ever show a broken image.
-// (Unsplash Source, which the original spec used, was shut down in 2024; it also
-// would have sent users' food names to a third party.)
-const DASH_PHOTOS = import.meta.env.REACT_APP_DASH_PHOTOS === 'true';
-const dashPhoto = (theme) => (DASH_PHOTOS ? `${import.meta.env.BASE_URL.replace(/\/$/, '')}/images/dash/${theme}.jpg` : null);
-
-const EXERCISE_THEMES = {
-  cardio: 'run', strength: 'gym', hiit: 'hiit', yoga: 'yoga',
-  cycling: 'cycle', swimming: 'swim', walking: 'walk', sports: 'sport',
-};
-
-function PhotoBg({ theme, className = '', children, label }) {
-  const src = dashPhoto(theme);
-  const [failedSrc, setFailedSrc] = useState(null);
-  const showImg = src && src !== failedSrc;
-  return (
-    <div className={`photo-bg photo-theme-${theme} ${className}`} role={label ? 'img' : undefined} aria-label={label}>
-      {showImg && (
-        <img className="photo-bg-img" src={src} alt="" aria-hidden="true"
-          loading="lazy" decoding="async" onError={() => setFailedSrc(src)}/>
-      )}
-      <div className="photo-bg-scrim"/>
-      <div className="photo-bg-content">{children}</div>
-    </div>
-  );
-}
-
-// Vector mountain + lake scene for the hero. Slow Ken Burns drift is CSS-only
-// (transform/opacity) and disabled under prefers-reduced-motion.
-function HeroScene() {
-  return (
-    <svg className="hero-scene" viewBox="0 0 800 360" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
-      <defs>
-        <linearGradient id="lifeosSky" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#2A1F6B"/>
-          <stop offset="55%" stopColor="#5B4FD4"/>
-          <stop offset="100%" stopColor="#F2A07B"/>
-        </linearGradient>
-        <linearGradient id="lifeosLake" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#3B2F8F" stopOpacity="0.9"/>
-          <stop offset="100%" stopColor="#120C33"/>
-        </linearGradient>
-      </defs>
-      <rect width="800" height="360" fill="url(#lifeosSky)"/>
-      <circle className="hero-sun" cx="560" cy="196" r="38" fill="#FFD6A5" opacity="0.85"/>
-      <path d="M0 250 L120 150 L200 210 L300 110 L400 200 L470 150 L560 230 L660 130 L800 240 L800 360 L0 360 Z" fill="#3A2E85"/>
-      <path d="M0 270 L90 200 L180 250 L260 190 L360 255 L450 205 L540 262 L640 195 L740 250 L800 225 L800 360 L0 360 Z" fill="#241A63"/>
-      <rect y="262" width="800" height="98" fill="url(#lifeosLake)"/>
-      <g className="hero-ripples" stroke="rgba(255,214,165,.45)" strokeWidth="2" strokeLinecap="round">
-        <line x1="520" y1="282" x2="600" y2="282"/>
-        <line x1="535" y1="298" x2="585" y2="298"/>
-        <line x1="548" y1="314" x2="572" y2="314"/>
-      </g>
-    </svg>
-  );
-}
-
-// Animated SVG glass. Water level animates with transform (GPU), not geometry attrs.
-function HydrationGlass({ filled, total = 8 }) {
-  const pct = Math.max(0, Math.min((filled / total) * 100, 100));
-  const innerH = 84;
-  const offset = innerH * (1 - pct / 100);
-  return (
-    <div className="hydration-glass-wrap" role="img" aria-label={`Hydration ${filled} of ${total} glasses`}>
-      <svg viewBox="0 0 60 100" width="56" height="94" aria-hidden="true">
-        <defs>
-          <clipPath id="lifeosGlassClip">
-            <path d="M9 10 L13 90 Q13 94 17 94 L43 94 Q47 94 47 90 L51 10 Z"/>
-          </clipPath>
-          <linearGradient id="lifeosWaterGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#93C5FD"/>
-            <stop offset="100%" stopColor="#2563EB"/>
-          </linearGradient>
-        </defs>
-        <g clipPath="url(#lifeosGlassClip)">
-          <g className="hydration-water" style={{ transform: `translateY(${offset}px)` }}>
-            <path className="hydration-wave" d="M-20 10 Q-5 6 10 10 T40 10 T70 10 T100 10 L100 100 L-20 100 Z" fill="url(#lifeosWaterGrad)"/>
-            {pct > 8 && [18, 30, 40, 24, 35].map((x, i) => (
-              <circle key={i} cx={x} cy={88 - (i % 3) * 6} r={1.4 + (i % 2) * 0.6}
-                fill="rgba(255,255,255,.65)" className="bubble-rise"
-                style={{ animationDelay: `${i * 0.55}s` }}/>
-            ))}
-          </g>
-        </g>
-        <path d="M9 10 L13 90 Q13 94 17 94 L43 94 Q47 94 47 90 L51 10" fill="none"
-          stroke="currentColor" strokeOpacity="0.35" strokeWidth="2" strokeLinejoin="round"/>
-        <line x1="15" y1="18" x2="17" y2="80" stroke="rgba(255,255,255,.5)" strokeWidth="2" strokeLinecap="round"/>
-      </svg>
-      <div className="hydration-glass-pct">{Math.round(pct)}%</div>
-    </div>
-  );
-}
-
-// Progress ring badge for achievements.
-function BadgeRing({ icon, title, progress, unlocked, color }) {
-  const r = 22;
-  const c = 2 * Math.PI * r;
-  const p = unlocked ? 1 : Math.max(0, Math.min(progress || 0, 1));
-  return (
-    <div className={`badge-ring ${unlocked ? 'badge-ring-unlocked' : ''}`} title={title}>
-      <svg width="56" height="56" viewBox="0 0 56 56" aria-hidden="true">
-        <circle cx="28" cy="28" r={r} fill="none" stroke="var(--color-border)" strokeWidth="4"/>
-        <circle cx="28" cy="28" r={r} fill="none" stroke={color} strokeWidth="4" strokeLinecap="round"
-          strokeDasharray={`${p * c} ${c}`} transform="rotate(-90 28 28)" className="badge-ring-arc"/>
-      </svg>
-      <span className="badge-ring-icon" aria-hidden="true">{icon}</span>
-      <span className="badge-ring-title">{title}</span>
-      <span className="sr-only">{unlocked ? 'Unlocked' : `${Math.round(p * 100)}% progress`}</span>
-    </div>
-  );
-}
 
 // ─────────────────────────────────────────────────────────────
 // Admin dashboard (owner only). Shows totals only, never one person's data;
@@ -360,6 +245,8 @@ function App() {
 
   // --- Notifications ---
   const [showNotifDropdown, setShowNotifDropdown] = useState(false);
+  const [showUserMenu, setShowUserMenu] = useState(false);
+  const [globalQuery, setGlobalQuery] = useState('');
   const [chartRange, setChartRange] = useState('7D');
 
   // If the server rejects our saved login (expired, or the signing key was rotated),
@@ -959,8 +846,10 @@ function App() {
 
   // Food search goes through our server: it keeps the USDA key secret, reads the right
   // (kcal) energy value and returns real portions. Values come back per 100 g.
-  const searchFood = async () => {
-    const q = searchQuery.trim();
+  // Accepts a query from the header search box; called from the Nutrition tab
+  // (click / Enter) it uses what's typed there.
+  const searchFood = async (queryOverride) => {
+    const q = (typeof queryOverride === 'string' ? queryOverride : searchQuery).trim();
     if (!q || searching) return;
     setSearching(true); setSearchResults([]); setPicked(null); setMessage('');
     try {
@@ -1031,15 +920,12 @@ function App() {
   const totalCarbs = Math.round(foodLogs.reduce((sum, f) => sum + f.carbs, 0) * 10) / 10;
   const totalFat = Math.round(foodLogs.reduce((sum, f) => sum + f.fat, 0) * 10) / 10;
   const caloriePercent = Math.min((totalCalories / dailyGoal) * 100, 100);
-  const remaining = Math.max(dailyGoal - totalCalories + totalBurned, 0);
   // Protein from body weight (about 0.7-0.8 g per lb), not a % of calories, which gave
   // unrealistic targets like 205 g. Fat about 28% of calories; carbs take the rest.
   const proteinPerLb = profile.goal === 'maintain' ? 0.7 : 0.8;
   const proteinGoal = Math.round(Math.min(Math.max(profile.weightLbs * proteinPerLb, 50), 220));
   const fatGoal = Math.round(dailyGoal * 0.28 / 9);
   const carbsGoal = Math.max(Math.round((dailyGoal - proteinGoal * 4 - fatGoal * 9) / 4), 50);
-  const circumference = 2 * Math.PI * 54;
-  const strokeDash = circumference - (caloriePercent / 100) * circumference;
 
   // --- Smart Reminders ---
   const getSmartReminders = () => {
@@ -1336,17 +1222,11 @@ function App() {
   // eslint-disable-next-line
   }, [token]);
 
-  // --- LifeOS 3.0 dashboard derived values ---
+  // --- Dashboard derived values ---
   const sameDay = (d) => d != null && String(d).slice(0, 10) === selectedDate;
   const daySleep = sleepLogs.find(s => sameDay(s.date)) || null;
-  const dayMood = moodLogs.find(m => sameDay(m.date)) || null;
-  const featuredFood = foodLogs.reduce((max, f) => ((f.calories || 0) > (max?.calories || 0) ? f : max), null);
-  const foodTheme = featuredFood ? `meal-${featuredFood.mealType || 'snack'}` : 'meal-default';
-  const latestExercise = exerciseLogs[0] || null;
-  const exerciseTheme = EXERCISE_THEMES[(latestExercise?.category || '').toLowerCase()] || 'move';
   const latestWeight = weightLogs.length > 0 ? weightLogs[0].weightLbs : null;
   const latestBodyFat = bodyFatLogs.length > 0 ? bodyFatLogs[0].bodyFatPercent : null;
-  const sparkData = dailyHistory.slice(-7);
   const mealsLogged = new Set(foodLogs.map(f => f.mealType)).size;
   const dailyFocus = [
     { key: 'meals', label: 'Log 3 meals', done: mealsLogged >= 3, tab: 'log' },
@@ -1354,8 +1234,6 @@ function App() {
     { key: 'protein', label: `Hit ${proteinGoal}g protein`, done: totalProtein >= proteinGoal, tab: 'log' },
     { key: 'move', label: 'Move your body', done: exerciseLogs.length > 0, tab: 'exercise' },
   ];
-  const focusDone = dailyFocus.filter(f => f.done).length;
-  const coachTip = smartReminders.find(r => r.icon !== '✅') || smartReminders[0];
   const achievementProgress = {
     streak_3: streak / 3, streak_7: streak / 7, streak_30: streak / 30,
     calorie_goal: dailyGoal > 0 ? totalCalories / dailyGoal : 0,
@@ -1367,6 +1245,55 @@ function App() {
     .slice(0, 6);
   const coachPrompts = ['What should I eat next?', 'How is my protein today?', 'Plan a quick workout'];
   const openCoachWith = (prompt) => { setActiveTab('coach'); askAiCoach(prompt); };
+  // One plain-language summary for the dashboard's AI Coach card, built from today's numbers.
+  const dashCoachText = (() => {
+    if (totalCalories === 0) return 'Nothing logged yet today. Start with breakfast and I will track your calories and macros as you go.';
+    const calPct = Math.round((totalCalories / dailyGoal) * 100);
+    const gaps = [
+      { name: 'protein', p: proteinGoal ? totalProtein / proteinGoal : 1 },
+      { name: 'carbs', p: carbsGoal ? totalCarbs / carbsGoal : 1 },
+      { name: 'fat', p: fatGoal ? totalFat / fatGoal : 1 },
+    ].sort((a, b) => a.p - b.p);
+    const best = gaps[gaps.length - 1].name;
+    const low = gaps[0];
+    const lowTip = low.name === 'protein' ? 'Consider adding more protein to support your fitness goals.'
+      : low.name === 'carbs' ? 'A serving of whole grains or fruit would round out your carbs.'
+      : 'A little healthy fat, like nuts or avocado, would balance the day.';
+    return `You're ${calPct}% into your calorie goal and furthest along on ${best}. ${low.p < 0.8 ? lowTip : 'Your macros are well balanced today.'}`;
+  })();
+
+  // Header search: questions go to the AI coach, anything else searches foods.
+  const handleGlobalSearch = (e) => {
+    e.preventDefault();
+    const q = globalQuery.trim();
+    if (!q) return;
+    const isQuestion = /\?$/.test(q) || /^(what|how|why|should|can|could|is|are|do|does|help|plan|give|suggest|tell)\b/i.test(q);
+    if (isQuestion) {
+      openCoachWith(q);
+    } else {
+      setSearchQuery(q);
+      setActiveTab('log');
+      searchFood(q);
+    }
+    setGlobalQuery('');
+  };
+
+  const DAILY_QUOTES = [
+    'Consistency today builds the healthier tomorrow you want.',
+    'Small steps every day add up to big results.',
+    'Fuel your body like it matters, because it does.',
+    'Progress, not perfection.',
+    'Every healthy choice compounds.',
+    'Move a little, eat well, rest deeply.',
+    'You don\u2019t have to be extreme, just consistent.',
+  ];
+  const dayOfYear = Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 0)) / 86400000);
+  const dailyQuote = DAILY_QUOTES[dayOfYear % DAILY_QUOTES.length];
+  const weekBars = dailyHistory.slice(-7).map(r => ({
+    day: r.day,
+    h: r.calories == null ? 6 : Math.max(10, Math.min(100, Math.round((r.calories / dailyGoal) * 100))),
+    logged: r.calories != null,
+  }));
 
   if (!token) {
     return (
@@ -1491,22 +1418,23 @@ function App() {
 
         <div className="nav-section-label">Main</div>
         {[
-          { id: 'dashboard', icon: 'ti-layout-dashboard', label: 'Dashboard' },
-          { id: 'log', icon: 'ti-salad', label: 'Nutrition', badge: foodLogs.length > 0 ? foodLogs.length : null },
-          { id: 'exercise', icon: 'ti-run', label: 'Activity', badge: exerciseLogs.length > 0 ? exerciseLogs.length : null },
-          { id: 'progress', icon: 'ti-chart-bar', label: 'Progress' },
-          { id: 'achievements', icon: 'ti-trophy', label: 'Achievements', badge: unlockedCount > 0 ? `${unlockedCount}` : null },
-          { id: 'bodyfat', icon: 'ti-ruler', label: 'Body Fat' },
-          { id: 'coach', icon: 'ti-robot', label: 'AI Coach' },
-          { id: 'sleep', icon: 'ti-moon', label: 'Sleep' },
-          { id: 'mood', icon: 'ti-mood-happy', label: 'Mood' },
-          { id: 'supplements', icon: 'ti-pill', label: 'Supplements' },
+          { id: 'dashboard', icon: 'home', label: 'Dashboard' },
+          { id: 'log', icon: 'utensils', label: 'Nutrition', badge: foodLogs.length > 0 ? foodLogs.length : null },
+          { id: 'exercise', icon: 'run', label: 'Activity', badge: exerciseLogs.length > 0 ? exerciseLogs.length : null },
+          { id: 'progress', icon: 'chart', label: 'Progress' },
+          { id: 'achievements', icon: 'star', label: 'Achievements', badge: unlockedCount > 0 ? `${unlockedCount}` : null },
+          { id: 'bodyfat', icon: 'ruler', label: 'Body Fat' },
+          { id: 'coach', icon: 'bot', label: 'AI Coach' },
+          { id: 'sleep', icon: 'moon', label: 'Sleep' },
+          { id: 'mood', icon: 'smile', label: 'Mood' },
+          { id: 'supplements', icon: 'pill', label: 'Supplements' },
         ].map(item => (
           <div key={item.id} className={`nav-item ${activeTab === item.id ? 'active' : ''}`}
             role="button" tabIndex={0} aria-current={activeTab === item.id ? 'page' : undefined}
             onClick={() => setActiveTab(item.id)}
             onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setActiveTab(item.id); } }}>
-            {item.label}
+            <Icon name={item.icon} size={18} className="nav-icon" />
+            <span className="nav-label">{item.label}</span>
             {item.badge && <span className="nav-badge">{item.badge}</span>}
           </div>
         ))}
@@ -1515,23 +1443,33 @@ function App() {
         <div className={`nav-item ${activeTab === 'profile' ? 'active' : ''}`} role="button" tabIndex={0}
           aria-current={activeTab === 'profile' ? 'page' : undefined} onClick={() => setActiveTab('profile')}
           onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setActiveTab('profile'); } }}>
-          Profile
+          <Icon name="user" size={18} className="nav-icon" />
+          <span className="nav-label">Profile</span>
         </div>
         {isAdmin && (
           <div className={`nav-item ${activeTab === 'admin' ? 'active' : ''}`} role="button" tabIndex={0}
             aria-current={activeTab === 'admin' ? 'page' : undefined}
             onClick={() => { setActiveTab('admin'); fetchAdminStats(true); }}
             onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setActiveTab('admin'); fetchAdminStats(true); } }}>
-            Admin
+            <Icon name="shield" size={18} className="nav-icon" />
+            <span className="nav-label">Admin</span>
           </div>
         )}
 
         <div className="sidebar-bottom">
-          <div className="score-card">
+          <div className="score-card score-card-x" title={healthScoreTitle}>
             <div className="score-label">Health Score</div>
-            <div className="score-number">{healthScore}</div>
-            <div className="score-sub" title={healthScoreTitle}>{healthLabel}</div>
-            <div className="score-bar"><div className="score-bar-fill" style={{'--w':`${healthScore}%`}}/></div>
+            <div className="score-x-row">
+              <div className="score-number">{healthScore}</div>
+              <div className="score-sub">{healthLabel}</div>
+            </div>
+            <div className="score-x-bars" aria-label="Calories versus goal, last 7 days">
+              {weekBars.map((b, i) => (
+                <span key={i} className={b.logged ? '' : 'is-empty'} style={{ height: `${b.h}%` }} title={`${b.day}: ${b.logged ? `${b.h}% of goal` : 'nothing logged'}`} />
+              ))}
+            </div>
+            <div className="score-x-caption">Calories vs goal, last 7 days</div>
+            <button type="button" className="score-x-link" onClick={() => setActiveTab('progress')}>View Details <Icon name="arrowRight" size={13} /></button>
           </div>
           {streak > 0 && (
             <div className="streak-card">
@@ -1549,11 +1487,16 @@ function App() {
         </div>
       </nav>
 
-      <header className="topnav">
+      <header className="topnav topx">
         <div className="topnav-greeting">
           <h2>{greeting}, {currentUser?.split(' ')[0] || currentUser} {greetingEmoji}</h2>
-          <p>"Every healthy choice compounds."</p>
+          <p>&ldquo;{dailyQuote}&rdquo;</p>
         </div>
+        <form className="topx-search" role="search" onSubmit={handleGlobalSearch}>
+          <Icon name="search" size={17} />
+          <input value={globalQuery} onChange={e => setGlobalQuery(e.target.value)}
+            placeholder="Search for foods, activities, or ask AI..." aria-label="Search foods or ask the AI coach" maxLength={200} />
+        </form>
         <div className="topnav-right">
           <button className="dark-mode-btn" onClick={() => setDarkMode(!darkMode)} title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'} aria-label={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}>
             {darkMode ? (
@@ -1624,339 +1567,68 @@ function App() {
               </>
             )}
           </div>
-          <div className="topnav-date">{new Date().toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})}</div>
-          <div className="topnav-user">
-            <div className="topnav-avatar">{currentUser?.charAt(0).toUpperCase()}</div>
-            <span className="topnav-username">{currentUser}</span>
+          <div className="topx-user">
+            <button type="button" className="topx-user-btn" onClick={() => setShowUserMenu(v => !v)}
+              aria-haspopup="menu" aria-expanded={showUserMenu} aria-label="Account menu">
+              <span className="topnav-avatar">{(currentUser || '?').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}</span>
+              <Icon name="chevronDown" size={15} />
+            </button>
+            {showUserMenu && (
+              <>
+                <div className="topx-menu-scrim" onClick={() => setShowUserMenu(false)} />
+                <div className="topx-menu" role="menu">
+                  <div className="topx-menu-name">{currentUser}</div>
+                  <button type="button" role="menuitem" onClick={() => { setActiveTab('profile'); setShowUserMenu(false); }}><Icon name="user" size={16} /> Profile</button>
+                  <button type="button" role="menuitem" onClick={() => { setDarkMode(!darkMode); setShowUserMenu(false); }}><Icon name={darkMode ? 'sun' : 'moon'} size={16} /> {darkMode ? 'Light mode' : 'Dark mode'}</button>
+                  <button type="button" role="menuitem" className="is-danger" onClick={() => { setShowUserMenu(false); logout(); }}><Icon name="logout" size={16} /> Sign out</button>
+                </div>
+              </>
+            )}
           </div>
-          <button className="topnav-logout" onClick={logout}>Sign Out</button>
         </div>
       </header>
 
       <main className="main-content">
+        {['dashboard', 'log', 'exercise'].includes(activeTab) && (
+          <div className="topx-daterow">
+            {!isToday && <button type="button" className="topx-today" onClick={goToToday}>Back to today</button>}
+            <div className="topx-date">
+              <button type="button" onClick={() => changeDate(-1)} aria-label="Previous day"><Icon name="chevronLeft" size={16} /></button>
+              <span><Icon name="calendar" size={15} /> {new Date(`${selectedDate}T12:00:00`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</span>
+              <button type="button" onClick={() => changeDate(1)} disabled={isToday} aria-label="Next day"><Icon name="chevronRight" size={16} /></button>
+            </div>
+          </div>
+        )}
 
         {/* DASHBOARD — LifeOS 3.0 */}
         {activeTab === 'dashboard' && (
-          <div className="tab-content dash3">
-
-            {/* CINEMATIC HERO */}
-            <section className="hero-cinematic" aria-label="Today overview">
-              <div className="hero-cinematic-bg">
-                <PhotoBg theme="hero" className="hero-photo"><HeroScene/></PhotoBg>
-              </div>
-              <div className="hero-cinematic-inner">
-                <div className="hero-cinematic-left">
-                  <div className="hero-greeting">GOOD {new Date().getHours() < 12 ? 'MORNING' : new Date().getHours() < 17 ? 'AFTERNOON' : 'EVENING'}</div>
-                  <h1 className="hero-name">{currentUser?.split(' ')[0] || currentUser || 'there'}</h1>
-                  <div className="hero-date">{formatDateLabel(selectedDate)}</div>
-                  <div className="hero-focus">
-                    <div className="hero-focus-head">
-                      <span>Daily focus</span>
-                      <span className="hero-focus-count">{focusDone}/{dailyFocus.length}</span>
-                    </div>
-                    <ul className="hero-focus-list">
-                      {dailyFocus.map(f => (
-                        <li key={f.key}>
-                          <button type="button" className={`hero-focus-item ${f.done ? 'is-done' : ''}`}
-                            aria-pressed={f.done}
-                            onClick={() => f.key === 'water' ? updateWater(w => w + 1) : setActiveTab(f.tab)}>
-                            <span className="hero-focus-check" aria-hidden="true">{f.done ? '✓' : ''}</span>
-                            {f.label}
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                </div>
-                <div className="hero-score" title={healthScoreTitle}>
-                  <svg width="120" height="120" viewBox="0 0 120 120" aria-hidden="true">
-                    <circle cx="60" cy="60" r="50" fill="none" stroke="rgba(255,255,255,.18)" strokeWidth="9"/>
-                    <circle cx="60" cy="60" r="50" fill="none" stroke="#fff" strokeWidth="9"
-                      strokeDasharray={`${Math.min(healthScore, 100) * 3.1416} 314.16`}
-                      strokeLinecap="round" transform="rotate(-90 60 60)" className="hero-score-arc"/>
-                  </svg>
-                  <div className="hero-score-text">
-                    <span className="hero-score-num">{healthScore}</span>
-                    <span className="hero-score-label">{healthLabel}</span>
-                  </div>
-                </div>
-              </div>
-            </section>
-
-            {streak >= 3 && (
-              <div className="streak-banner">
-                <span className="streak-fire">🔥</span>
-                <span className="streak-num">{streak}</span>
-                <span className="streak-text">Day Streak</span>
-                {streak >= 30 && <span className="streak-badge">💎 Monthly Master</span>}
-                {streak >= 7 && streak < 30 && <span className="streak-badge">⭐ Week Warrior</span>}
-                {streak >= 3 && streak < 7 && <span className="streak-badge">🌱 On a Roll</span>}
-              </div>
-            )}
-
-            <div className="date-nav">
-              <button className="date-nav-btn" onClick={() => changeDate(-1)} aria-label="Previous day">‹</button>
-              <div className="date-nav-center">
-                <span className="date-nav-label">{formatDateLabel(selectedDate)}</span>
-                {!isToday && <button className="date-today-btn" onClick={goToToday}>Back to Today</button>}
-              </div>
-              <button className="date-nav-btn" onClick={() => changeDate(1)} disabled={isToday} aria-label="Next day">›</button>
-            </div>
-
-            {/* 4-UP STAT CARDS */}
-            <div className="stat-cards-grid">
-              <button type="button" className="stat-card" onClick={() => setActiveTab('log')}>
-                <PhotoBg theme={foodTheme} className="stat-card-photo">
-                  <span className="stat-card-kicker">Calories</span>
-                  <span className="stat-card-val">{totalCalories}<small>/{dailyGoal}</small></span>
-                  <span className="stat-card-sub">{featuredFood ? `Top: ${featuredFood.foodName}` : 'Nothing logged yet'}</span>
-                  <span className="stat-card-bar"><span style={{width:`${Math.min(caloriePercent,100)}%`}}/></span>
-                </PhotoBg>
-              </button>
-              <div className="stat-card stat-card-hydration">
-                <div className="stat-card-hydration-inner">
-                  <div>
-                    <span className="stat-card-kicker">Hydration</span>
-                    <span className="stat-card-val">{water}<small>/8</small></span>
-                    <span className="stat-card-sub">glasses</span>
-                    <div className="stat-card-actions">
-                      <button type="button" className="mini-btn" onClick={() => updateWater(w => w - 1)} aria-label="Remove a glass" disabled={water === 0}>−</button>
-                      <button type="button" className="mini-btn mini-btn-primary" onClick={() => updateWater(w => w + 1)} aria-label="Add a glass">+</button>
-                    </div>
-                  </div>
-                  <HydrationGlass filled={water}/>
-                </div>
-              </div>
-              <button type="button" className="stat-card" onClick={() => setActiveTab('exercise')}>
-                <PhotoBg theme={exerciseTheme} className="stat-card-photo">
-                  <span className="stat-card-kicker">Activity</span>
-                  <span className="stat-card-val">{totalBurned}<small> kcal</small></span>
-                  <span className="stat-card-sub">{latestExercise ? `${latestExercise.exerciseName} · ${latestExercise.durationMinutes} min` : 'No workout logged'}</span>
-                  <span className="stat-card-bar"><span style={{width:`${Math.min((totalBurned/500)*100,100)}%`}}/></span>
-                </PhotoBg>
-              </button>
-              <button type="button" className="stat-card" onClick={() => setActiveTab('sleep')}>
-                <PhotoBg theme="sleep" className="stat-card-photo">
-                  <span className="stat-card-kicker">Sleep</span>
-                  <span className="stat-card-val">{daySleep ? daySleep.hoursSlept : '—'}<small>{daySleep ? ' hrs' : ''}</small></span>
-                  <span className="stat-card-sub">{daySleep ? `Quality: ${daySleep.quality}` : 'Not logged'}</span>
-                  <span className="stat-card-bar"><span style={{width:`${Math.min(((daySleep?.hoursSlept || 0)/8)*100,100)}%`}}/></span>
-                </PhotoBg>
-              </button>
-            </div>
-
-            {/* AI COACH INSIGHT */}
-            {coachTip && (
-              <div className="ai-insight-strip" style={{'--tip-color': coachTip.color}}>
-                <div className="ai-insight-icon" aria-hidden="true">{coachTip.icon}</div>
-                <div className="ai-insight-body">
-                  <div className="ai-insight-title">{coachTip.title}</div>
-                  <div className="ai-insight-desc">{coachTip.desc}</div>
-                  <div className="ai-insight-prompts">
-                    {coachPrompts.map(p => (
-                      <button key={p} type="button" className="ai-insight-chip" onClick={() => openCoachWith(p)} disabled={aiLoading}>{p}</button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            <div className="calorie-card">
-              <div className="calorie-ring-wrapper">
-                <svg width="130" height="130" viewBox="0 0 130 130">
-                  <circle cx="65" cy="65" r="54" fill="none" stroke="#F0F0F4" strokeWidth="10"/>
-                  <circle cx="65" cy="65" r="54" fill="none" stroke="#5B4FD4" strokeWidth="10"
-                    strokeDasharray={circumference} strokeDashoffset={strokeDash}
-                    strokeLinecap="round" transform="rotate(-90 65 65)"
-                    style={{transition:'stroke-dashoffset 0.8s ease'}}/>
-                  <circle cx="65" cy="65" r="38" fill="none" stroke="#F0F0F4" strokeWidth="7"/>
-                  <circle cx="65" cy="65" r="38" fill="none" stroke="#1D9E75" strokeWidth="7"
-                    strokeDasharray={`${Math.min((totalProtein/proteinGoal)*100,100)*2.39} 239`}
-                    strokeLinecap="round" transform="rotate(-90 65 65)"
-                    style={{transition:'stroke-dasharray 0.8s ease'}}/>
-                </svg>
-                <div className="calorie-ring-text">
-                  <span className={`calorie-ring-num ${totalCalories >= 1000 ? "calorie-ring-num-sm" : ""}`}>{totalCalories}</span>
-                  <span className="calorie-ring-label">eaten</span>
-                </div>
-              </div>
-              <div className="calorie-stats">
-                <div className="cal-stat-row">
-                  <div className="cal-stat-dot" style={{background:'#5B4FD4'}}/>
-                  <span className="cal-stat-label">Daily Goal</span>
-                  <span className="cal-stat-val">{dailyGoal}</span>
-                  <span className="cal-stat-badge badge-purple">{Math.round(caloriePercent)}%</span>
-                </div>
-                <div className="cal-sep"/>
-                <div className="cal-stat-row">
-                  <div className="cal-stat-dot" style={{background:'#1D9E75'}}/>
-                  <span className="cal-stat-label">Remaining</span>
-                  <span className="cal-stat-val" style={{color:remaining===0?'#D85A30':'#1D9E75'}}>{remaining}</span>
-                  <span className="cal-stat-badge badge-green">kcal</span>
-                </div>
-                <div className="cal-sep"/>
-                <div className="cal-stat-row">
-                  <div className="cal-stat-dot" style={{background:'#E8820C'}}/>
-                  <span className="cal-stat-label">Burned</span>
-                  <span className="cal-stat-val" style={{color:'#E8820C'}}>{totalBurned}</span>
-                  <span className="cal-stat-badge badge-orange">Exercise</span>
-                </div>
-                <div className="cal-sep"/>
-                <div className="cal-stat-row">
-                  <div className="cal-stat-dot" style={{background:'#A0A0B0'}}/>
-                  <span className="cal-stat-label">Net Eaten</span>
-                  <span className="cal-stat-val" style={{color: (totalCalories - totalBurned) > dailyGoal ? '#D85A30' : '#5B4FD4'}}>{Math.max(totalCalories - totalBurned, 0)}</span>
-                  <span className="cal-stat-badge badge-purple">net kcal</span>
-                </div>
-              </div>
-              {bmi && (
-                <div style={{textAlign:'right',flexShrink:0}}>
-                  <div style={{fontSize:'10px',color:'#9898AA',marginBottom:'4px',textTransform:'uppercase',letterSpacing:'.5px'}}>BMI</div>
-                  <div style={{fontSize:'28px',fontWeight:'700',color:bmiTone.color,letterSpacing:'-1px',lineHeight:1}}>{bmi}</div>
-                  <div style={{fontSize:'10px',color:bmiTone.color,fontWeight:'600',background:bmiTone.bg,padding:'2px 8px',borderRadius:'20px',marginTop:'4px'}}>{bmiLabel}</div>
-                </div>
-              )}
-            </div>
-
-            {/* MACROS + 7-DAY SPARKLINES */}
-            <div className="macro-row">
-              {[
-                {key:'protein',label:'Protein',val:totalProtein,goal:proteinGoal,color:'#5B4FD4',pctBg:'#F0EFFD',pctColor:'#5B4FD4'},
-                {key:'carbs',label:'Carbs',val:totalCarbs,goal:carbsGoal,color:'#1D9E75',pctBg:'#EDFAF5',pctColor:'#1D9E75'},
-                {key:'fat',label:'Fat',val:totalFat,goal:fatGoal,color:'#E8820C',pctBg:'#FEF4E8',pctColor:'#E8820C'},
-              ].map(m => (
-                <div key={m.label} className="macro-card">
-                  <div className="macro-card-label">{m.label}</div>
-                  <div className="macro-card-pct" style={{background:m.pctBg,color:m.pctColor}}>{m.goal > 0 ? Math.round((m.val/m.goal)*100) : 0}%</div>
-                  <div className="macro-card-val" style={{color:m.color}}>{m.val}g</div>
-                  <div className="macro-card-goal">of {m.goal}g goal</div>
-                  <div className="macro-card-bar"><div className="macro-card-fill" style={{'--w':`${m.goal > 0 ? Math.min((m.val/m.goal)*100,100) : 0}%`,background:m.color}}/></div>
-                  {sparkData.length > 1 && (
-                    <div className="macro-sparkline" aria-label={`${m.label} last 7 days`}>
-                      <ResponsiveContainer width="100%" height={36}>
-                        <LineChart data={sparkData} margin={{top:4,right:2,bottom:2,left:2}}>
-                          <Line type="monotone" dataKey={m.key} stroke={m.color} strokeWidth={2} dot={false} isAnimationActive={false}/>
-                        </LineChart>
-                      </ResponsiveContainer>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-
-            {/* BODY METRICS */}
-            <div className="body-metrics-card">
-              <button type="button" className="body-metric" onClick={() => setActiveTab('progress')}>
-                <span className="body-metric-label">Weight</span>
-                <span className="body-metric-val">{latestWeight != null ? latestWeight : '—'}<small>{latestWeight != null ? ' lbs' : ''}</small></span>
-              </button>
-              <button type="button" className="body-metric" onClick={() => setActiveTab('profile')}>
-                <span className="body-metric-label">BMI</span>
-                <span className="body-metric-val">{bmi || '—'}</span>
-                {bmi && <span className="body-metric-tag">{bmiLabel}</span>}
-              </button>
-              <button type="button" className="body-metric" onClick={() => setActiveTab('bodyfat')}>
-                <span className="body-metric-label">Body Fat</span>
-                <span className="body-metric-val">{latestBodyFat != null ? latestBodyFat : '—'}<small>{latestBodyFat != null ? '%' : ''}</small></span>
-                {latestBodyFat != null && <span className="body-metric-tag">{getBodyFatCategory(latestBodyFat, profile.sex)}</span>}
-              </button>
-            </div>
-
-            {exerciseLogs.length > 0 && (
-              <div className="foodlog-card">
-                <div className="foodlog-header">
-                  <h3 className="foodlog-title">💪 Today's Workouts</h3>
-                  <span className="foodlog-count">🔥 {totalBurned} cal burned</span>
-                </div>
-                {exerciseLogs.map(e => (
-                  <div key={e.id} className="food-item">
-                    <div className="food-meal-dot" style={{background:'#E8820C'}}/>
-                    <div style={{flex:1}}>
-                      <p className="food-item-name">{e.exerciseName}</p>
-                      <p className="food-item-macros">{e.category} · {e.durationMinutes} min</p>
-                    </div>
-                    <span className="food-item-cal" style={{color:'#E8820C',borderColor:'rgba(232,130,12,.2)',background:'#FEF4E8'}}>{e.caloriesBurned} cal</span>
-                    <button className="food-delete-btn" onClick={() => deleteExercise(e.id)}>🗑️</button>
-                  </div>
-                ))}
-              </div>
-            )}
-            {/* WELLNESS STRIP */}
-            <div className="wellness-strip">
-              <div className="wellness-tile" onClick={() => setActiveTab('sleep')}>
-                <span className="wellness-tile-icon">😴</span>
-                <div className="wellness-tile-val">{daySleep ? daySleep.hoursSlept : '—'}</div>
-                <div className="wellness-tile-label">Hrs Sleep</div>
-                <div className="wellness-tile-bar"><div className="wellness-tile-fill" style={{width:`${Math.min(((daySleep?.hoursSlept || 0)/8)*100,100)}%`,background:'#7C5CFC'}}/></div>
-              </div>
-              <div className="wellness-tile" onClick={() => setActiveTab('mood')}>
-                <span className="wellness-tile-icon">😊</span>
-                <div className="wellness-tile-val">{dayMood ? (dayMood.moodLabel || dayMood.moodScore) : '—'}</div>
-                <div className="wellness-tile-label">Mood</div>
-                <div className="wellness-tile-bar"><div className="wellness-tile-fill" style={{width:`${Math.min(((dayMood?.moodScore || 0)/10)*100,100)}%`,background:'#1D9E75'}}/></div>
-              </div>
-              <div className="wellness-tile" onClick={() => setActiveTab('exercise')}>
-                <span className="wellness-tile-icon">🔥</span>
-                <div className="wellness-tile-val">{totalBurned}</div>
-                <div className="wellness-tile-label">Cal Burned</div>
-                <div className="wellness-tile-bar"><div className="wellness-tile-fill" style={{width:`${Math.min((totalBurned/500)*100,100)}%`,background:'#E8820C'}}/></div>
-              </div>
-            </div>
-
-            {/* ACHIEVEMENT RINGS */}
-            <div className="badge-strip">
-              <div className="badge-strip-head">
-                <span>Achievements</span>
-                <button type="button" className="badge-strip-link" onClick={() => setActiveTab('achievements')}>{unlockedCount}/{achievements.length} unlocked →</button>
-              </div>
-              <div className="badge-strip-row">
-                {dashBadges.map(b => (
-                  <BadgeRing key={b.id} icon={b.icon} title={b.title} progress={b.progress} unlocked={b.unlocked} color={b.color}/>
-                ))}
-              </div>
-            </div>
-
-            <div className="foodlog-card">
-              <div className="foodlog-header">
-                <h3 className="foodlog-title">{formatDateLabel(selectedDate)}'s Food Log</h3>
-                <span className="foodlog-count">{foodLogs.length} items</span>
-              </div>
-              {foodLogs.length === 0 ? (
-                <div className="empty-state">
-                  <span>🍽️</span>
-                  <p>No food logged {isToday ? 'yet today' : 'on this day'}</p>
-                  {isToday && <button className="empty-btn" onClick={() => setActiveTab('log')}>Log your first meal →</button>}
-                </div>
-              ) : (
-                mealCategories.map(cat => {
-                  const items = foodLogs.filter(f => f.mealType === cat.key);
-                  if (items.length === 0) return null;
-                  return (
-                    <div key={cat.key} className="meal-section">
-                      <div className="meal-section-header">
-                        <span className="meal-section-name">{cat.label}</span>
-                        <span className="meal-section-cal">{items.reduce((s,f)=>s+f.calories,0)} kcal</span>
-                      </div>
-                      {items.map(f => (
-                        <div key={f.id} className="food-item">
-                          <div className="food-meal-dot" style={{background:cat.color}}/>
-                          <div style={{flex:1,minWidth:0}}>
-                            <p className="food-item-name">{f.foodName}</p>
-                            <p className="food-item-macros">{f.servingLabel ? `${f.quantity && f.quantity !== 1 ? `${f.quantity} × ` : ""}${f.servingLabel} · ` : ""}{Math.round(f.protein*10)/10}g P · {Math.round(f.carbs*10)/10}g C · {Math.round(f.fat*10)/10}g F</p>
-                            {f.insight && f.insight !== 'A nutritious choice for your health!' && (
-                              <p className="food-insight">✦ {f.insight}</p>
-                            )}
-                          </div>
-                          <span className="food-item-cal">{f.calories}</span>
-                          <button className="food-delete-btn" onClick={() => deleteFood(f.id)}>🗑️</button>
-                        </div>
-                      ))}
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
+          <Dashboard
+            d={{
+              calories: totalCalories, calorieGoal: dailyGoal,
+              protein: totalProtein, carbs: totalCarbs, fat: totalFat,
+              proteinGoal, carbsGoal, fatGoal,
+              burned: totalBurned, burnGoal: 500,
+              water, waterGoal: 8,
+              sleepHours: daySleep ? daySleep.hoursSlept : null, sleepGoal: 8,
+              score: healthScore, scoreLabel: healthLabel, scoreTitle: healthScoreTitle,
+              focus: dailyFocus,
+              history: dailyHistory,
+              weightLogs, bodyFatLogs,
+              weight: latestWeight, bodyFat: latestBodyFat,
+              bmi, bmiLabel, bmiTone,
+              foodLogs,
+              isToday, dateLabel: formatDateLabel(selectedDate),
+              dateShort: new Date(`${selectedDate}T12:00:00`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
+              coachText: dashCoachText,
+              coachPrompts, aiLoading,
+              badges: dashBadges,
+            }}
+            on={{
+              tab: setActiveTab,
+              addWater: () => updateWater(w => w + 1),
+              askCoach: openCoachWith,
+            }}
+          />
         )}
 
         {/* LOG FOOD */}
@@ -2096,6 +1768,45 @@ function App() {
                     </div>
                   ))}
                 </div>
+              )}
+            </div>
+            <div className="foodlog-card">
+              <div className="foodlog-header">
+                <h3 className="foodlog-title">{formatDateLabel(selectedDate)}'s Food Log</h3>
+                <span className="foodlog-count">{foodLogs.length} items · {totalCalories} kcal</span>
+              </div>
+              {foodLogs.length === 0 ? (
+                <div className="empty-state">
+                  <span>🍽️</span>
+                  <p>No food logged {isToday ? 'yet today' : 'on this day'}</p>
+                </div>
+              ) : (
+                mealCategories.map(cat => {
+                  const items = foodLogs.filter(f => f.mealType === cat.key);
+                  if (items.length === 0) return null;
+                  return (
+                    <div key={cat.key} className="meal-section">
+                      <div className="meal-section-header">
+                        <span className="meal-section-name">{cat.label}</span>
+                        <span className="meal-section-cal">{items.reduce((s,f)=>s+f.calories,0)} kcal</span>
+                      </div>
+                      {items.map(f => (
+                        <div key={f.id} className="food-item">
+                          <div className="food-meal-dot" style={{background:cat.color}}/>
+                          <div style={{flex:1,minWidth:0}}>
+                            <p className="food-item-name">{f.foodName}</p>
+                            <p className="food-item-macros">{f.servingLabel ? `${f.quantity && f.quantity !== 1 ? `${f.quantity} × ` : ""}${f.servingLabel} · ` : ""}{Math.round(f.protein*10)/10}g P · {Math.round(f.carbs*10)/10}g C · {Math.round(f.fat*10)/10}g F</p>
+                            {f.insight && f.insight !== 'A nutritious choice for your health!' && (
+                              <p className="food-insight">✦ {f.insight}</p>
+                            )}
+                          </div>
+                          <span className="food-item-cal">{f.calories}</span>
+                          <button className="food-delete-btn" onClick={() => deleteFood(f.id)} aria-label={`Delete ${f.foodName}`}>🗑️</button>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })
               )}
             </div>
           </div>
