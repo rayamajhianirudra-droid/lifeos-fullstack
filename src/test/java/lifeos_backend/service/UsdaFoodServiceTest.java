@@ -83,4 +83,15 @@ class UsdaFoodServiceTest {
     void searchesAllFourUsdaDataTypes() {
         assertEquals(List.of("Survey (FNDDS)", "Foundation", "SR Legacy", "Branded"), UsdaFoodService.DATA_TYPES);
     }
+
+    @Test
+    void passesBarcodeOnlyWhenItIsDigits() {
+        Map<String, Object> base = Map.of("description", "OREO", "dataType", "Branded", "gtinUpc", "044000032029",
+                "foodNutrients", List.of(n("208", "KCAL", 480)));
+        assertEquals("044000032029", UsdaFoodService.normalize(base).get("upc"));
+
+        Map<String, Object> bad = Map.of("description", "OREO", "dataType", "Branded", "gtinUpc", "04400<x>",
+                "foodNutrients", List.of(n("208", "KCAL", 480)));
+        assertFalse(UsdaFoodService.normalize(bad).containsKey("upc"));
+    }
 }

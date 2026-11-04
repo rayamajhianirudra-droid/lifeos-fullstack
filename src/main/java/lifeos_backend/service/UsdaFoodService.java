@@ -147,6 +147,9 @@ public class UsdaFoodService {
         Object brand = f.get("brandName") != null ? f.get("brandName") : f.get("brandOwner");
         if (brand != null && !brand.toString().isBlank()) out.put("brand", tidyName(brand.toString()));
         out.put("dataType", f.get("dataType"));
+        // Barcode of branded foods, used to find the package photo.
+        Object upc = f.get("gtinUpc");
+        if (upc != null && upc.toString().trim().matches("\\d{8,14}")) out.put("upc", upc.toString().trim());
         out.put("per100g", Map.of(
                 "calories", round1(kcal), "protein", round1(protein),
                 "carbs", round1(carbs), "fat", round1(fat)));

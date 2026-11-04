@@ -4,6 +4,7 @@ import {
   LineChart, Line,
 } from 'recharts';
 import Icon from '../components/Icon';
+import FoodThumb from '../components/FoodThumb';
 import './Dashboard.css';
 
 // Photos live in public/images/dash/<name>.jpg (Unsplash License). If a file is
@@ -291,7 +292,11 @@ export default function Dashboard({ d, on }) {
               <li key={m.key} className={m.items.length ? '' : 'is-empty'}>
                 <span className="dashx-tl-dot" aria-hidden="true" />
                 <span className="dashx-tl-time">{m.label}</span>
-                <div className="dashx-tl-thumb"><DashPhoto name={m.photo} /></div>
+                <div className="dashx-tl-thumb">
+                  {m.items.length && d.foodPhotos?.[m.top.foodName]
+                    ? <FoodThumb photo={d.foodPhotos[m.top.foodName]} size={46} className="dashx-tl-photo" />
+                    : <DashPhoto name={m.photo} />}
+                </div>
                 <div className="dashx-tl-main">
                   {m.items.length ? (
                     <>
