@@ -1,6 +1,6 @@
 import { render, fireEvent } from '@testing-library/react';
 import { describe, it, expect } from 'vitest';
-import FoodThumb, { isSafePhotoUrl } from './FoodThumb';
+import FoodThumb, { isSafePhotoUrl, PhotoCredit } from './FoodThumb';
 
 const pexels = { url: 'https://images.pexels.com/photos/1/a.jpeg?h=200', credit: 'Jane Doe', source: 'pexels' };
 
@@ -29,5 +29,24 @@ describe('FoodThumb', () => {
     expect(isSafePhotoUrl('javascript:alert(1)')).toBe(false);
     expect(isSafePhotoUrl('https://images.pexels.com.evil.example/x.jpg')).toBe(false);
     expect(isSafePhotoUrl('https://images.openfoodfacts.org/images/products/1/front.200.jpg')).toBe(true);
+  });
+});
+
+describe('PhotoCredit', () => {
+  it('credits the Unsplash photographer and Unsplash with referral links', () => {
+    const photo = { url: 'https://images.unsplash.com/photo-1?ixid=a&w=400', credit: 'Ann Lee',
+      creditUrl: 'https://unsplash.com/@ann?utm_source=lifeos_health&utm_medium=referral', source: 'unsplash' };
+    const { container, getByText } = render(<PhotoCredit photo={photo} />);
+    expect(container.textContent).toBe('Photo by Ann Lee on Unsplash');
+    expect(getByText('Ann Lee').getAttribute('href')).toBe(photo.creditUrl);
+    expect(getByText('Unsplash').getAttribute('href')).toContain('utm_source=lifeos_health');
+    expect(getByText('Ann Lee').getAttribute('rel')).toBe('noopener noreferrer');
+  });
+
+  it('never links somewhere unexpected', () => {
+    const photo = { url: 'https://images.unsplash.com/p', credit: 'X', creditUrl: 'javascript:alert(1)', source: 'unsplash' };
+    const { container } = render(<PhotoCredit photo={photo} />);
+    expect(container.querySelectorAll('a')).toHaveLength(1);
+    expect(container.querySelector('a').getAttribute('href')).toContain('https://unsplash.com/');
   });
 });

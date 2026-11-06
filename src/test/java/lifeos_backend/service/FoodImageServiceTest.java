@@ -54,6 +54,8 @@ class FoodImageServiceTest {
     void onlyReturnsHttpsImagesFromTheKnownHosts() {
         assertTrue(FoodImageService.isAllowedImageUrl("https://images.pexels.com/photos/1/pexels-photo-1.jpeg?h=200"));
         assertTrue(FoodImageService.isAllowedImageUrl("https://images.openfoodfacts.org/images/products/1/front_en.3.200.jpg"));
+        assertTrue(FoodImageService.isAllowedImageUrl("https://images.unsplash.com/photo-1?ixid=abc&w=400"));
+        assertFalse(FoodImageService.isAllowedImageUrl("https://images.unsplash.com.evil.example/x.jpg"));
         assertFalse(FoodImageService.isAllowedImageUrl("http://images.pexels.com/photos/1.jpg"));
         assertFalse(FoodImageService.isAllowedImageUrl("https://images.pexels.com.evil.example/x.jpg"));
         assertFalse(FoodImageService.isAllowedImageUrl("javascript:alert(1)"));
