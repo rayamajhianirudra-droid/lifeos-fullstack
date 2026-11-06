@@ -244,8 +244,10 @@ public class FoodImageService {
                         Object photos = body.get("photos");
                         if (photos instanceof List<?> list && !list.isEmpty() && list.get(0) instanceof Map<?, ?> p) {
                             Object src = p.get("src");
-                            Object tiny = src instanceof Map<?, ?> s ? s.get("tiny") : null;
-                            if (tiny instanceof String u && isAllowedImageUrl(u)) {
+                            // "medium" is about 350 px tall: sharp on phone and retina screens
+                            // ("tiny" at 200 px looked soft). Fall back to "small" if missing.
+                            Object medium = src instanceof Map<?, ?> s ? (s.get("medium") != null ? s.get("medium") : s.get("small")) : null;
+                            if (medium instanceof String u && isAllowedImageUrl(u)) {
                                 String who = p.get("photographer") instanceof String n ? clip(n, 120) : "Pexels";
                                 String page = p.get("url") instanceof String pu && pu.startsWith("https://www.pexels.com/")
                                         ? clip(pu, 500) : "https://www.pexels.com";

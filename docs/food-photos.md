@@ -7,7 +7,7 @@ Search results, the food log and the dashboard's meal list show a photo of each 
 | Food | Source | Key needed |
 |---|---|---|
 | Branded (has a barcode in USDA) | Open Food Facts, the real package photo, looked up by barcode | No |
-| Everything else, or a barcode with no photo | Pexels, a stock photo found by a simplified name ("Chicken, broiler or fryers, breast, roasted" becomes "chicken breast") | `PEXELS_API_KEY` |
+| Everything else, or a barcode with no photo | Pexels (the "medium" size, about 350 px), a stock photo found by a simplified name ("Chicken, broiler or fryers, breast, roasted" becomes "chicken breast") | `PEXELS_API_KEY` |
 
 Without `PEXELS_API_KEY`, plain foods show a plate icon and everything else works.
 
