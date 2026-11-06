@@ -45,6 +45,11 @@ public class JwtService {
         return getClaims(token).getSubject();
     }
 
+    /** When the token was issued (second precision), or null if it has none. */
+    public Date extractIssuedAt(String token) {
+        return getClaims(token).getIssuedAt();
+    }
+
     public boolean isTokenValid(String token) {
         try {
             return getClaims(token).getExpiration().after(new Date());
