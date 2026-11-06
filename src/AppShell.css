@@ -82,3 +82,7 @@ body.dark .topx-menu { background: #16162A; }
 body.dark .food-thumb { background: linear-gradient(135deg, rgba(91, 79, 212, .25), rgba(255, 255, 255, .04)); color: #B7AEFF; }
 .food-item { gap: 12px; }
 .result-source a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+.portion-photo { grid-column: 1 / -1; display: flex; align-items: center; gap: 12px; }
+.portion-photo .food-thumb { border-radius: 16px; }
+.photo-credit { margin: 0; font-size: 11.5px; color: var(--color-ink-secondary); }
+.photo-credit a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }

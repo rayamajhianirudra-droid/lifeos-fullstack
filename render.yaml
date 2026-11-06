@@ -43,8 +43,11 @@ services:
         sync: false
       - key: USDA_API_KEY
         sync: false
-      # Optional: food photos for plain foods (free at https://www.pexels.com/api/).
-      # Without it, branded foods still get package photos from Open Food Facts.
+      # Optional: food photos for plain foods. Unsplash "Access Key" (free at
+      # https://unsplash.com/developers). Used before Pexels when both are set.
+      # Without either, branded foods still get package photos from Open Food Facts.
+      - key: UNSPLASH_ACCESS_KEY
+        sync: false
       - key: PEXELS_API_KEY
         sync: false
       # Comma-separated emails allowed to open the admin dashboard (totals only).
