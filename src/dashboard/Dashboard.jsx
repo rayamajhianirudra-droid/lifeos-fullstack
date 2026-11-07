@@ -4,6 +4,7 @@ import {
   LineChart, Line,
 } from 'recharts';
 import Icon from '../components/Icon';
+import { dateLocale } from '../dates';
 import { weightIn, weightUnit } from '../units';
 import FoodThumb from '../components/FoodThumb';
 import './Dashboard.css';
@@ -95,6 +96,12 @@ function Hexagon({ badge }) {
  * The dashboard, matching the LifeOS mockup. Pure presentation: App passes the
  * already-computed numbers in `d` and the actions it can perform in `on`.
  */
+// Accent colours are for fills and icons; small text uses a darker (light mode) or
+// lighter (dark mode) shade from App.css so it stays readable (WCAG AA 4.5:1).
+const TEXT_SHADE = { '#6C5CE7': 'var(--color-primary-text)', '#1D9E75': 'var(--text-green)', '#3B82F6': 'var(--text-blue)',
+  '#8B5CF6': 'var(--text-purple)', '#E8820C': 'var(--text-orange)' };
+const textColor = (c) => TEXT_SHADE[c] || c;
+
 export default function Dashboard({ d, on }) {
   const [macroRange, setMacroRange] = useState('today');
   const [chartMetric, setChartMetric] = useState('calories');
@@ -131,7 +138,7 @@ export default function Dashboard({ d, on }) {
     carbs: { label: 'Carbs', goal: d.carbsGoal, unit: 'g' },
     fat: { label: 'Fat', goal: d.fatGoal, unit: 'g' },
   }[chartMetric];
-  const weekday = (iso) => new Date(`${iso}T12:00:00`).toLocaleDateString('en-US', { weekday: 'short' });
+  const weekday = (iso) => new Date(`${iso}T12:00:00`).toLocaleDateString(dateLocale(), { weekday: 'short' });
   const chartRows = last7.map(r => ({ day: weekday(r.date), value: r[chartMetric] ?? 0, logged: r[chartMetric] != null }));
   // Keep the goal line visible even on days far below or above it.
   const chartMax = Math.ceil(Math.max(metricMeta.goal, ...chartRows.map(r => r.value)) * 1.12);
@@ -214,7 +221,7 @@ export default function Dashboard({ d, on }) {
               <div className="dashx-stat-val">{s.value}<small> {s.goal}</small></div>
               <div className="dashx-stat-bar-row">
                 <ProgressBar value={s.p} color={s.color} />
-                <span className="dashx-stat-pct" style={{ color: s.color }}>{s.p}%</span>
+                <span className="dashx-stat-pct" style={{ color: textColor(s.color) }}>{s.p}%</span>
               </div>
             </div>
             <div className="dashx-stat-photo"><DashPhoto name={s.photo} /></div>
@@ -244,7 +251,7 @@ export default function Dashboard({ d, on }) {
                     <div className="dashx-macro-label">{m.label}</div>
                     <div className="dashx-macro-val">{m.val}g<small> / {m.goal}g</small></div>
                   </div>
-                  <span className="dashx-macro-pct" style={{ color: m.color }}>{pct(m.val, m.goal)}%</span>
+                  <span className="dashx-macro-pct" style={{ color: textColor(m.color) }}>{pct(m.val, m.goal)}%</span>
                 </div>
                 <ProgressBar value={pct(m.val, m.goal)} color={m.color} />
                 <Sparkline data={sparkRows} dataKey={m.key} color={m.color} />

@@ -5,6 +5,7 @@ import './App.css';
 import './AppShell.css';
 import Dashboard from './dashboard/Dashboard';
 import Icon from './components/Icon';
+import { dateLocale } from './dates';
 import FoodThumb, { PhotoCredit } from './components/FoodThumb';
 import AccountData from './components/AccountData';
 import { ConvertedNumberInput, UnitsToggle } from './components/UnitInputs';
@@ -19,7 +20,7 @@ const toLocalISO = (d = new Date()) =>
 const parseLocalISO = (s) => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
 // "2026-10-27" -> "Oct 27". new Date("2026-10-27") is UTC midnight, which showed the
 // PREVIOUS day everywhere in the US; parse it as a local calendar date instead.
-const shortDate = (iso) => iso ? parseLocalISO(String(iso).slice(0, 10)).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
+const shortDate = (iso) => iso ? parseLocalISO(String(iso).slice(0, 10)).toLocaleDateString(dateLocale(), { month: 'short', day: 'numeric' }) : '';
 
 // ─────────────────────────────────────────────────────────────
 // Admin dashboard (owner only). Shows totals only, never one person's data;
@@ -785,7 +786,7 @@ function App() {
     const yesterday = toLocalISO(new Date(Date.now() - 86400000));
     if (dateStr === today) return 'Today';
     if (dateStr === yesterday) return 'Yesterday';
-    return parseLocalISO(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    return parseLocalISO(dateStr).toLocaleDateString(dateLocale(), { month: 'short', day: 'numeric', year: 'numeric' });
   };
 
   const continueRegistration = () => {
@@ -1146,11 +1147,11 @@ function App() {
   const bmi = profile.weightLbs && profile.heightFeet ?
     ((profile.weightLbs / ((profile.heightFeet * 12 + profile.heightInches) ** 2)) * 703).toFixed(1) : null;
   // Color the BMI by category (it used to be green even for "Obese").
-  const bmiTone = !bmi ? { color: '#9898AA', bg: 'transparent' }
-    : bmi < 18.5 ? { color: '#E8820C', bg: '#FEF4E8' }
-    : bmi < 25 ? { color: '#1D9E75', bg: '#EDFAF5' }
-    : bmi < 30 ? { color: '#E8820C', bg: '#FEF4E8' }
-    : { color: '#D85A30', bg: '#FEF4EE' };
+  const bmiTone = !bmi ? { color: 'var(--color-ink-secondary)', bg: 'transparent' }
+    : bmi < 18.5 ? { color: '#9A5300', bg: '#FEF4E8' }
+    : bmi < 25 ? { color: '#137A59', bg: '#EDFAF5' }
+    : bmi < 30 ? { color: '#9A5300', bg: '#FEF4E8' }
+    : { color: '#B23E14', bg: '#FEF4EE' };
   const bmiLabel = bmi ? (bmi < 18.5 ? 'Underweight' : bmi < 25 ? 'Normal' : bmi < 30 ? 'Overweight' : 'Obese') : null;
 
   const estimatedBurn = exerciseDuration
@@ -1710,7 +1711,7 @@ function App() {
                 }}>
                   <div style={{padding:'12px 16px 8px', borderBottom: darkMode ? '1px solid rgba(255,255,255,.07)' : '1px solid #F0F0F4'}}>
                     <span style={{fontSize:'13px', fontWeight:'700', color: darkMode ? '#F0F0FF' : '#0A0A14'}}>Smart Reminders</span>
-                    <span style={{fontSize:'11px', color:'#8888A0', marginLeft:'6px'}}>{new Date().toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})}</span>
+                    <span style={{fontSize:'11px', color:'var(--color-ink-secondary)', marginLeft:'6px'}}>{new Date().toLocaleDateString(dateLocale(),{weekday:'short',month:'short',day:'numeric'})}</span>
                   </div>
                   <div style={{maxHeight:'320px', overflowY:'auto'}}>
                     {smartReminders.map((r, i) => (
@@ -1728,7 +1729,7 @@ function App() {
                         }}>{r.icon}</span>
                         <div>
                           <div style={{fontSize:'12px', fontWeight:'700', color: darkMode ? '#F0F0FF' : '#0A0A14', marginBottom:'2px'}}>{r.title}</div>
-                          <div style={{fontSize:'11px', color:'#8888A0', lineHeight:'1.4'}}>{r.desc}</div>
+                          <div style={{fontSize:'11px', color:'var(--color-ink-secondary)', lineHeight:'1.4'}}>{r.desc}</div>
                         </div>
                       </div>
                     ))}
@@ -1764,7 +1765,7 @@ function App() {
             {!isToday && <button type="button" className="topx-today" onClick={goToToday}>Back to today</button>}
             <div className="topx-date">
               <button type="button" onClick={() => changeDate(-1)} aria-label="Previous day"><Icon name="chevronLeft" size={16} /></button>
-              <span><Icon name="calendar" size={15} /> {new Date(`${selectedDate}T12:00:00`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</span>
+              <span><Icon name="calendar" size={15} /> {new Date(`${selectedDate}T12:00:00`).toLocaleDateString(dateLocale(), { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</span>
               <button type="button" onClick={() => changeDate(1)} disabled={isToday} aria-label="Next day"><Icon name="chevronRight" size={16} /></button>
             </div>
           </div>
@@ -1789,7 +1790,7 @@ function App() {
               foodLogs,
               foodPhotos,
               isToday, dateLabel: formatDateLabel(selectedDate),
-              dateShort: new Date(`${selectedDate}T12:00:00`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
+              dateShort: new Date(`${selectedDate}T12:00:00`).toLocaleDateString(dateLocale(), { weekday: 'short', month: 'short', day: 'numeric' }),
               coachText: dashCoachText,
               coachPrompts, aiLoading,
               badges: dashBadges,
@@ -2059,7 +2060,7 @@ function App() {
                     <div key={e.id} className="weight-item">
                       <div>
                         <div style={{fontSize:'13px',fontWeight:'600',color: darkMode ? '#F0F0FF' : '#0A0A14'}}>{e.exerciseName}</div>
-                        <div style={{fontSize:'11px',color:'#9898AA',marginTop:'2px'}}>{e.category} · {e.durationMinutes} min</div>
+                        <div style={{fontSize:'11px',color:'var(--color-ink-secondary)',marginTop:'2px'}}>{e.category} · {e.durationMinutes} min</div>
                       </div>
                       <span className="weight-val" style={{color:'#E8820C'}}>{e.caloriesBurned} cal</span>
                       <button onClick={() => deleteExercise(e.id)}
@@ -2106,15 +2107,15 @@ function App() {
                 <div className="analytics-stat-label">Foods Logged</div>
               </div>
               <div className="analytics-stat analytics-stat-divider">
-                <div className="analytics-stat-val" style={{color:'var(--color-primary)'}}>{totalCalories}</div>
+                <div className="analytics-stat-val" style={{color:'var(--color-primary-text)'}}>{totalCalories}</div>
                 <div className="analytics-stat-label">Calories</div>
               </div>
               <div className="analytics-stat analytics-stat-divider">
-                <div className="analytics-stat-val" style={{color:'var(--color-nutrition)'}}>{totalProtein}g</div>
+                <div className="analytics-stat-val" style={{color:'var(--text-green)'}}>{totalProtein}g</div>
                 <div className="analytics-stat-label">Protein</div>
               </div>
               <div className="analytics-stat analytics-stat-divider">
-                <div className="analytics-stat-val" style={{color:'var(--color-activity)'}}>🔥{streak}</div>
+                <div className="analytics-stat-val" style={{color:'var(--text-orange)'}}>🔥{streak}</div>
                 <div className="analytics-stat-label">Day Streak</div>
               </div>
             </div>
@@ -2269,10 +2270,10 @@ function App() {
                 <div className="analytics-card-title">🎯 Today's Goals</div>
               </div>
               {[
-                {label:'Calories',val:totalCalories,goal:dailyGoal,unit:'cal',color:'var(--color-primary)'},
+                {label:'Calories',val:totalCalories,goal:dailyGoal,unit:'cal',color:'var(--color-primary-text)'},
                 {label:'Protein',val:totalProtein,goal:proteinGoal,unit:'g',color:'#5B4FD4'},
-                {label:'Carbs',val:totalCarbs,goal:carbsGoal,unit:'g',color:'var(--color-nutrition)'},
-                {label:'Fat',val:totalFat,goal:fatGoal,unit:'g',color:'var(--color-activity)'},
+                {label:'Carbs',val:totalCarbs,goal:carbsGoal,unit:'g',color:'var(--text-green)'},
+                {label:'Fat',val:totalFat,goal:fatGoal,unit:'g',color:'var(--text-orange)'},
               ].map(item => {
                 const pct = Math.min(Math.round((item.val / item.goal) * 100), 100);
                 return (
@@ -2565,7 +2566,7 @@ function App() {
                 <input className="chat-input" placeholder="Ask your AI coach anything..."
                   value={aiMessage} onChange={e => setAiMessage(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && !aiLoading && askAiCoach()}/>
-                <button className="chat-send-btn" onClick={askAiCoach} disabled={aiLoading || !aiMessage.trim()}>
+                <button className="chat-send-btn" aria-label="Send message" onClick={askAiCoach} disabled={aiLoading || !aiMessage.trim()}>
                   {aiLoading ? <span className="chat-spinner"/> : <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>}
                 </button>
               </div>
@@ -2674,10 +2675,10 @@ function App() {
                   <input type="number" step="0.5" className="profile-input" placeholder="e.g. 7.5"
                     value={sleepHours} onChange={e=>setSleepHours(e.target.value)}/></div>
                 <div className="profile-field"><label>Bedtime</label>
-                  <input type="time" className="profile-input"
+                  <input type="time" className="profile-input" aria-label="Bedtime"
                     value={sleepBedtime} onChange={e=>setSleepBedtime(e.target.value)}/></div>
                 <div className="profile-field"><label>Wake Time</label>
-                  <input type="time" className="profile-input"
+                  <input type="time" className="profile-input" aria-label="Wake time"
                     value={sleepWakeTime} onChange={e=>setSleepWakeTime(e.target.value)}/></div>
               </div>
               <div className="profile-field-full" style={{marginTop:'8px'}}><label>Sleep Quality</label>
@@ -2745,10 +2746,10 @@ function App() {
                 <label className="mood-slider-label">How are you feeling today? ({moodScore}/10)</label>
                 <div style={{display:'flex',alignItems:'center',gap:'12px'}}>
                   <span style={{fontSize:'28px'}}>{['','😭','😢','😟','😕','😐','🙂','😊','😄','🤩','🥳'][moodScore]}</span>
-                  <input type="range" min="1" max="10" value={moodScore}
+                  <input type="range" min="1" max="10" value={moodScore} aria-label="Mood from 1 to 10"
                     onChange={e=>setMoodScore(parseInt(e.target.value))}
                     style={{flex:1,accentColor:'var(--color-primary)',height:'6px',cursor:'pointer'}}/>
-                  <span style={{fontSize:'16px',fontWeight:'700',color:'var(--color-primary)',minWidth:'20px'}}>{moodScore}</span>
+                  <span style={{fontSize:'16px',fontWeight:'700',color:'var(--color-primary-text)',minWidth:'20px'}}>{moodScore}</span>
                 </div>
               </div>
               <div className="profile-field-full"><label>Energy Level</label>
@@ -2826,7 +2827,7 @@ function App() {
                   <input type="number" className="profile-input" placeholder="e.g. 500"
                     value={suppDosage} onChange={e=>setSuppDosage(e.target.value)}/></div>
                 <div className="profile-field"><label>Unit</label>
-                  <select className="profile-input" value={suppUnit} onChange={e=>setSuppUnit(e.target.value)}>
+                  <select className="profile-input" aria-label="Unit" value={suppUnit} onChange={e=>setSuppUnit(e.target.value)}>
                     {['mg','g','mcg','IU','ml','oz','serving','capsule','tablet','scoop'].map(u=>(
                       <option key={u} value={u}>{u}</option>
                     ))}
