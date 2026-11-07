@@ -1,0 +1,30 @@
+# Keeps the free Render instance awake so users don't wait ~1 minute for it to wake up
+# (it sleeps after 15 minutes without traffic). /api/health does not touch the database,
+# so Neon can still suspend when nobody is using the app. One free instance running all
+# month fits inside Render's 750 free hours.
+#
+# GitHub may delay scheduled runs at busy times; an UptimeRobot monitor on the same URL
+# (see docs/deploy-render-neon.md) is the more punctual backup and also sends alerts.
+name: Keep API awake
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - name: Ping /api/health
+        run: |
+          for i in 1 2 3; do
+            code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 90 https://api.lifeoshealth.com/api/health) || true
+            echo "attempt $i: HTTP $code"
+            [ "$code" = "200" ] && exit 0
+            sleep 10
+          done
+          echo "API did not answer 200"; exit 1

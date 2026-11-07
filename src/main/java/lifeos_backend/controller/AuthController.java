@@ -21,6 +21,7 @@ public class AuthController {
     private final JwtService jwtService;
     private final PasswordEncoder passwordEncoder;
     private final RateLimiter rateLimiter;
+    private final lifeos_backend.service.SessionCheckCache sessionCache;
 
     // Brute-force limits. Per-email is the main protection; per-IP is generous
     // because several real users can share one IP (campus Wi-Fi, mobile carriers).
@@ -37,11 +38,13 @@ public class AuthController {
     public AuthController(UserRepository userRepository,
                           JwtService jwtService,
                           PasswordEncoder passwordEncoder,
-                          RateLimiter rateLimiter) {
+                          RateLimiter rateLimiter,
+                          lifeos_backend.service.SessionCheckCache sessionCache) {
         this.userRepository = userRepository;
         this.jwtService = jwtService;
         this.passwordEncoder = passwordEncoder;
         this.rateLimiter = rateLimiter;
+        this.sessionCache = sessionCache;
         this.dummyHash = passwordEncoder.encode("timing-equalizer-not-a-real-password");
     }
 
@@ -65,6 +68,7 @@ public class AuthController {
         user.setUnits(user.getUnits());   // only "metric" or "imperial"
         user.markCreatedNow();            // ignore any createdAt sent by the client
         userRepository.save(user);
+        sessionCache.forget(user.getEmail());   // a cached "no such account" must not block the new one
         String token = jwtService.generateToken(user.getEmail());
         return ResponseEntity.ok(Map.of("token", token, "name", user.getName()));
     }

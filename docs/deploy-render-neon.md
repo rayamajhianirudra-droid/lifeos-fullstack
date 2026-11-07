@@ -139,3 +139,28 @@ Upgrade in place, no code changes: Render Starter (no sleep, more memory) and a
 Neon paid plan. Before running more than one backend instance, move the rate
 limiter counters to Redis or Postgres (see `RateLimiter.java`) and switch
 schema changes from `ddl-auto=update` to Flyway migrations.
+
+## Staying fast on the free tier
+
+Measured on 2026-11-07 on the live site:
+- **Asleep:** the first request after 15 idle minutes took more than a minute (Render wakes the instance).
+- **Just woken:** for the first few minutes Java runs unoptimized, and the dashboard took 3 to 6 s.
+- **Warm:** the dashboard took about 1 s and a simple call 0.2 s.
+
+What keeps it warm and quick:
+- `.github/workflows/keepalive.yml` pings `/api/health` every 10 minutes. That endpoint does not
+  touch the database, so Neon can still suspend. GitHub can delay scheduled runs, so an UptimeRobot
+  monitor on the same URL every 5 minutes is the more punctual backup and also sends alerts.
+- The JVM uses only the quick JIT compiler (`-XX:TieredStopAtLevel=1` in the Dockerfile). On
+  0.1 CPU the full optimizing compiler spends seconds of CPU after every start.
+- Hikari keeps one warm database connection for 5 idle minutes. A new TLS connection to Neon
+  costs about 0.5 to 1 s on 0.1 CPU.
+- `JwtFilter` remembers each account's check for 60 s (`SessionCheckCache`); account deletion
+  clears it at once.
+- `/api/dashboard` runs its 12 parts on 4 threads, so their database round trips overlap. The
+  request's own thread does no database work. With open-session-in-view, a query there would
+  hold one of the 5 connections while waiting for the parts, and under load that deadlocked.
+  Each response carries `timingsMs` per part.
+
+Deploys restart the server, so the minutes after a merge are slower while it warms up.
+

@@ -35,9 +35,11 @@ public class AccountService {
     private static final Set<String> HIDDEN_COLUMNS = Set.of("user_id", "workout_plan_id", "endpoint", "p256dh", "auth", "auth_key");
 
     private final JdbcTemplate jdbc;
+    private final SessionCheckCache sessionCache;
 
-    public AccountService(JdbcTemplate jdbc) {
+    public AccountService(JdbcTemplate jdbc, SessionCheckCache sessionCache) {
         this.jdbc = jdbc;
+        this.sessionCache = sessionCache;
     }
 
     /** Everything we store about the user, as plain JSON-friendly maps. Never includes the password hash. */
@@ -85,6 +87,16 @@ public class AccountService {
         counts.put("password_reset_tokens", jdbc.update(
                 "DELETE FROM password_reset_tokens WHERE lower(email) = lower(?)", u.getEmail()));
         counts.put("users", jdbc.update("DELETE FROM users WHERE id = ?", u.getId()));
+        // Sessions must stop now, not when the cached check expires. Also after commit,
+        // in case a request re-cached the account while this transaction was running.
+        sessionCache.forget(u.getEmail());
+        String email = u.getEmail();
+        if (org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive()) {
+            org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
+                    new org.springframework.transaction.support.TransactionSynchronization() {
+                        @Override public void afterCommit() { sessionCache.forget(email); }
+                    });
+        }
         // Id and row counts only: no email or name in the logs.
         log.info("ACCOUNT DELETED user id={} rows={}", u.getId(), counts);
         return counts;
