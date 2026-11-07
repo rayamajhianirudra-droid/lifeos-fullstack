@@ -182,7 +182,12 @@ function App() {
   // Water is saved to the account (one 8 oz entry per glass) for the selected day.
   const [water, setWater] = useState(0);
   const [waterLogs, setWaterLogs] = useState([]);
-  const [waterBusy, setWaterBusy] = useState(false);
+  // Water taps update the screen at once; a background loop makes the server match.
+  const waterWanted = useRef(null);     // the count the user asked for, while saving
+  const waterSaving = useRef(false);
+  const waterLogsRef = useRef([]);
+  useEffect(() => { waterLogsRef.current = waterLogs; }, [waterLogs]);
+  const viewedDate = useRef(null);
   const [mealType, setMealType] = useState('breakfast');
   const [resetToken, setResetToken] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -612,7 +617,7 @@ function App() {
     const weightKg = profile.weightLbs * 0.453592;
     const calories = Math.round((met * weightKg * parseInt(exerciseDuration)) / 60);
     try {
-      await axios.post(`${API}/exercise`, {
+      const res = await axios.post(`${API}/exercise`, {
         exerciseName,
         durationMinutes: parseInt(exerciseDuration),
         caloriesBurned: calories,
@@ -621,17 +626,27 @@ function App() {
       }, { headers: { Authorization: `Bearer ${token}` } });
       setExerciseName('');
       setExerciseDuration('');
-      fetchExerciseLogs(selectedDate);
-    } catch (err) { console.log(err); }
+      if (res.data && res.data.id != null) {
+        setExerciseLogs(prev => [...prev, res.data]);
+        setTotalBurned(prev => prev + (res.data.caloriesBurned || 0));
+      } else {
+        fetchExerciseLogs(selectedDate);
+      }
+    } catch { setMessage('❌ Could not save that activity. Please try again.'); }
   };
 
   const deleteExercise = async (id) => {
+    const removed = exerciseLogs.find(e => e.id === id);
+    setExerciseLogs(prev => prev.filter(e => e.id !== id));
+    if (removed) setTotalBurned(prev => Math.max(0, prev - (removed.caloriesBurned || 0)));
     try {
       await axios.delete(`${API}/exercise/${id}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      fetchExerciseLogs(selectedDate);
-    } catch (err) { console.log(err); }
+    } catch {
+      fetchExerciseLogs(selectedDate);   // put back whatever the server still has
+      setMessage('❌ Could not delete that activity. Please try again.');
+    }
   };
 
   const askAiCoach = async (override) => {
@@ -738,30 +753,44 @@ function App() {
     } catch { /* keep showing the last known value */ }
   };
 
-  // Accepts a number or an updater function, like setState. Saves to the server.
-  const updateWater = async (next) => {
-    if (waterBusy) return;
-    const target = Math.max(0, Math.min(typeof next === 'function' ? next(water) : next, 20));
-    if (target === water) return;
+  // Accepts a number or an updater function, like setState. Shows the new count at
+  // once (taps are never ignored) and saves in the background.
+  const updateWater = (next) => {
+    const current = waterWanted.current ?? water;
+    const target = Math.max(0, Math.min(typeof next === 'function' ? next(current) : next, 20));
+    if (target === current) return;
+    waterWanted.current = target;
+    setWater(target);
+    saveWater(selectedDate);
+  };
+
+  const saveWater = async (date) => {
+    if (waterSaving.current) return;          // the running loop will pick up the new target
+    waterSaving.current = true;
     const headers = { Authorization: `Bearer ${token}` };
-    const before = water;
-    setWater(target);          // instant feedback
-    setWaterBusy(true);
+    let logs = [...waterLogsRef.current];
+    const count = () => Math.round(logs.reduce((sum, w) => sum + (w.amountOz || 0), 0) / 8);
     try {
-      if (target > before) {
-        for (let i = before; i < target; i++) {
-          await axios.post(`${API}/water`, { amountOz: 8, date: selectedDate }, { headers });
+      while (waterWanted.current != null && count() !== waterWanted.current) {
+        if (count() < waterWanted.current) {
+          const res = await axios.post(`${API}/water`, { amountOz: 8, date }, { headers });
+          logs = [...logs, res.data];
+        } else {
+          const newest = logs.reduce((a, b) => (b.id > a.id ? b : a));
+          await axios.delete(`${API}/water/${newest.id}`, { headers });
+          logs = logs.filter(w => w.id !== newest.id);
         }
-      } else {
-        const newestFirst = [...waterLogs].sort((a, b) => b.id - a.id).slice(0, before - target);
-        for (const w of newestFirst) await axios.delete(`${API}/water/${w.id}`, { headers });
       }
+      if (viewedDate.current === date) setWaterLogs(logs);   // unless the user moved to another day
     } catch {
       setMessage('❌ Could not save water. Check your connection.');
+      if (viewedDate.current === date) await fetchWater(date);   // show what the server really has
     }
-    await fetchWater(selectedDate);
-    setWaterBusy(false);
+    waterWanted.current = null;
+    waterSaving.current = false;
   };
+
+  useEffect(() => { viewedDate.current = selectedDate; }, [selectedDate]);
 
   const changeDate = (direction) => {
     const current = parseLocalISO(selectedDate);
@@ -1005,24 +1034,39 @@ function App() {
     };
   };
 
-  const logFood = async (food) => {
+  // Pull in AI food tips written after the save, without replacing the list (so a food
+  // that is still saving never disappears).
+  const refreshInsights = async (date) => {
     try {
-      await axios.post(`${API}/foodlogs`, {
-        foodName: food.name, calories: food.calories,
-        protein: food.protein, carbs: food.carbs, fat: food.fat,
-        mealType: mealType, date: selectedDate,
-        fdcId: food.fdcId, servingLabel: food.servingLabel, quantity: food.quantity, grams: food.grams,
-      }, { headers: { Authorization: `Bearer ${token}` } });
-      setMessage('✅ ' + food.name.substring(0, 40) + ' logged!');
-      if (food.photo) {
-        // Show the same photo in the log right away (logged foods are keyed by name).
-        photoAsked.current.add(food.name);
-        setFoodPhotos(prev => ({ ...prev, [food.name]: food.photo }));
-      }
-      setSearchQuery(''); setSearchResults([]); setPicked(null);
-      fetchFoodLogs(selectedDate); fetchStreak(); fetchDailyHistory();
-      setTimeout(() => fetchFoodLogs(selectedDate), 4000);
-      setTimeout(() => setMessage(''), 3000);
+      const res = await axios.get(`${API}/foodlogs?date=${date}`, { headers: { Authorization: `Bearer ${token}` } });
+      const byId = new Map((res.data || []).map(f => [f.id, f.insight]));
+      setFoodLogs(prev => prev.map(f => (byId.get(f.id) && byId.get(f.id) !== f.insight ? { ...f, insight: byId.get(f.id) } : f)));
+    } catch { /* tips are optional */ }
+  };
+
+  const logFood = async (food) => {
+    const body = {
+      foodName: food.name, calories: food.calories,
+      protein: food.protein, carbs: food.carbs, fat: food.fat,
+      mealType: mealType, date: selectedDate,
+      fdcId: food.fdcId, servingLabel: food.servingLabel, quantity: food.quantity, grams: food.grams,
+    };
+    // Show it in the log right away; the server copy replaces it when the save finishes.
+    const tempId = `pending-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    setFoodLogs(prev => [...prev, { ...body, id: tempId, pending: true }]);
+    if (food.photo) {
+      // Same photo in the log right away (logged foods are keyed by name).
+      photoAsked.current.add(food.name);
+      setFoodPhotos(prev => ({ ...prev, [food.name]: food.photo }));
+    }
+    setSearchQuery(''); setSearchResults([]); setPicked(null);
+    setMessage('✅ ' + food.name.substring(0, 40) + ' logged!');
+    setTimeout(() => setMessage(''), 3000);
+    try {
+      const res = await axios.post(`${API}/foodlogs`, body, { headers: { Authorization: `Bearer ${token}` } });
+      setFoodLogs(prev => prev.map(f => (f.id === tempId ? res.data : f)));
+      fetchStreak(); fetchDailyHistory();
+      setTimeout(() => refreshInsights(body.date), 4000);   // the AI tip is written in the background
 
       // Check if this food log pushed us past 80%/100% of calorie goal
       const userId = getUserIdFromToken(token);
@@ -1036,16 +1080,26 @@ function App() {
           console.log('Threshold check failed:', err);
         });
       }
-    } catch { setMessage('❌ Error logging food.'); }
+    } catch {
+      setFoodLogs(prev => prev.filter(f => f.id !== tempId));   // undo the instant add
+      setMessage('❌ Could not save that food. Check your connection and try again.');
+    }
   };
 
+  // Removes it from the screen at once; puts it back if the server says no.
   const deleteFood = async (id) => {
+    if (String(id).startsWith('pending-')) return;   // still saving: nothing to delete yet
+    const removed = foodLogs.find(f => f.id === id);
+    setFoodLogs(prev => prev.filter(f => f.id !== id));
     try {
       await axios.delete(`${API}/foodlogs/${id}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      fetchFoodLogs(selectedDate); fetchStreak(); fetchDailyHistory();
-    } catch { setMessage('❌ Error deleting food.'); }
+      fetchStreak(); fetchDailyHistory();
+    } catch {
+      if (removed) setFoodLogs(prev => (prev.some(f => f.id === id) ? prev : [...prev, removed]));
+      setMessage('❌ Could not delete that food. Please try again.');
+    }
   };
 
   const totalCalories = Math.round(foodLogs.reduce((sum, f) => sum + f.calories, 0));
@@ -1332,10 +1386,12 @@ function App() {
   };
   const logCustomFood = async (cf) => {
     try {
-      await axios.post(`${API}/custom-foods/${cf.id}/log`, { mealType, date: selectedDate },
+      const res = await axios.post(`${API}/custom-foods/${cf.id}/log`, { mealType, date: selectedDate },
         { headers: { Authorization: `Bearer ${token}` } });
       setMessage(`✅ ${cf.foodName} logged!`);
-      fetchFoodLogs(selectedDate);
+      if (res.data && res.data.id != null) setFoodLogs(prev => [...prev, res.data]);
+      else fetchFoodLogs(selectedDate);
+      fetchStreak(); fetchDailyHistory();
       setTimeout(() => setMessage(''), 2000);
     } catch { setMessage('❌ Could not log that food. Please try again.'); }
   };
