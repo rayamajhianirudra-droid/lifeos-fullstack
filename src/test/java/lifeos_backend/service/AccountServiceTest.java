@@ -56,4 +56,20 @@ class AccountServiceTest {
         }
         return out;
     }
+
+    @Test
+    void pushSubscriptionSecretsAreNeverExported() throws Exception {
+        java.lang.reflect.Field f = AccountService.class.getDeclaredField("HIDDEN_COLUMNS");
+        f.setAccessible(true);
+        @SuppressWarnings("unchecked")
+        Set<String> hidden = (Set<String>) f.get(null);
+        for (java.lang.reflect.Field field : lifeos_backend.model.PushSubscriptionEntity.class.getDeclaredFields()) {
+            if (java.lang.reflect.Modifier.isStatic(field.getModifiers())) continue;
+            jakarta.persistence.Column c = field.getAnnotation(jakarta.persistence.Column.class);
+            String col = c != null && !c.name().isEmpty() ? c.name()
+                    : field.getName().replaceAll("([a-z])([A-Z])", "$1_$2").toLowerCase(Locale.ROOT);
+            if (Set.of("id", "user_id").contains(col)) continue;
+            assertTrue(hidden.contains(col), "push column " + col + " would be exported");
+        }
+    }
 }

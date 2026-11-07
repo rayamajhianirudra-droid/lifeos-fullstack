@@ -22,6 +22,7 @@ const PATHS = {
   chevronRight: 'M9 5l7 7-7 7',
   chevronDown: 'M5 9l7 7 7-7',
   arrowRight: 'M5 12h14M13 6l6 6-6 6',
+  download: 'M12 4v11M7 10l5 5 5-5M5 20h14',
   plus: 'M12 5v14M5 12h14',
   check: 'M5 12.5l4.5 4.5L19 7.5',
   sparkles: 'M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8zM19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z',

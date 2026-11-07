@@ -12,6 +12,9 @@ and ask an AI coach for advice that is based on their own logs.
 
 - **Food logging** backed by USDA FoodData Central: server-side search, real
   serving sizes (for example 1 sandwich, 1 medium banana) and per-portion macros.
+- **Your data, your call:** download everything as JSON or delete the account (password +
+  "DELETE"; every row removed in one transaction, all sessions end at once), and a
+  [privacy policy](https://www.lifeoshealth.com/privacy.html) ([docs/account-and-privacy.md](docs/account-and-privacy.md)).
 - **Food photos** in search, the log and the dashboard: package photos from Open
   Food Facts for branded foods, Unsplash photos for the rest, cached on the server
   ([docs/food-photos.md](docs/food-photos.md)).

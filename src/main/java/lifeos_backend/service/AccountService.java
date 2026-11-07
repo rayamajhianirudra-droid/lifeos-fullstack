@@ -32,7 +32,7 @@ public class AccountService {
             "push_subscriptions");
 
     /** Columns never exported: internal links, and secrets of the browser push channel. */
-    private static final Set<String> HIDDEN_COLUMNS = Set.of("user_id", "workout_plan_id", "endpoint", "p256dh", "auth");
+    private static final Set<String> HIDDEN_COLUMNS = Set.of("user_id", "workout_plan_id", "endpoint", "p256dh", "auth", "auth_key");
 
     private final JdbcTemplate jdbc;
 
