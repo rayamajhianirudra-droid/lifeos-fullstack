@@ -308,17 +308,67 @@ function App() {
   const dailyGoal = calculateDailyGoal(profile);
   const heightInchesTotal = profile.heightFeet * 12 + profile.heightInches;
 
+  // One request for everything the app shows on open (was 12). If the server is older
+  // than this app (a deploy in progress) or a part failed, those parts load one by one.
+  const loadEverythingSeparately = (parts) => {
+    const all = !parts;
+    const want = (k) => all || parts.includes(k);
+    if (want('foodLogs')) fetchFoodLogs(selectedDate);
+    if (want('streak')) fetchStreak();
+    if (want('weightLogs')) fetchWeightLogs();
+    if (want('bodyFatLogs')) fetchBodyFatLogs();
+    if (want('exerciseLogs')) fetchExerciseLogs(selectedDate);
+    if (want('history')) fetchDailyHistory();
+    if (want('waterLogs')) fetchWater(selectedDate);
+    if (want('profile')) fetchProfile();
+    if (want('supplementLogs')) fetchSupplements();
+    if (want('sleepLogs')) fetchSleep();
+    if (want('moodLogs')) fetchMood();
+    if (want('customFoods')) fetchCustomFoods();
+  };
+
+  const fetchDashboard = async (date) => {
+    let d;
+    try {
+      const res = await axios.get(`${API}/dashboard`, {
+        params: { date, today: toLocalISO() }, headers: { Authorization: `Bearer ${token}` }
+      });
+      d = res.data;
+    } catch (err) {
+      if (err.response?.status === 401 || err.response?.status === 403) return;   // signed out elsewhere
+      loadEverythingSeparately();
+      fetchAdminStats();
+      return;
+    }
+    if (Array.isArray(d.foodLogs)) setFoodLogs(d.foodLogs);
+    if (typeof d.streak === 'number') setStreak(d.streak);
+    if (Array.isArray(d.history)) setDailyHistory(d.history);
+    if (Array.isArray(d.exerciseLogs)) {
+      setExerciseLogs(d.exerciseLogs);
+      setTotalBurned(d.exerciseLogs.reduce((sum, e) => sum + e.caloriesBurned, 0));
+    }
+    if (Array.isArray(d.weightLogs)) setWeightLogs(d.weightLogs);
+    if (Array.isArray(d.bodyFatLogs)) setBodyFatLogs(d.bodyFatLogs);
+    if (Array.isArray(d.sleepLogs)) setSleepLogs(d.sleepLogs);
+    if (Array.isArray(d.moodLogs)) setMoodLogs(d.moodLogs);
+    if (Array.isArray(d.supplementLogs)) setSupplementLogs(d.supplementLogs);
+    if (Array.isArray(d.customFoods)) setCustomFoods(d.customFoods);
+    if (d.profile) applyProfile(d.profile);
+    let legacyWater = false;
+    try { legacyWater = !!localStorage.getItem('waterLog'); } catch { /* storage blocked */ }
+    if (Array.isArray(d.waterLogs) && !legacyWater) {
+      setWaterLogs(d.waterLogs);
+      setWater(Math.round(d.waterLogs.reduce((sum, w) => sum + (w.amountOz || 0), 0) / 8));
+    } else {
+      fetchWater(date);   // also moves an old browser-only water count to the account
+    }
+    if (Array.isArray(d.failed) && d.failed.length) loadEverythingSeparately(d.failed);
+    if (d.admin === true) fetchAdminStats();
+  };
+
   useEffect(() => {
     if (token) {
-      fetchFoodLogs(selectedDate);
-      fetchStreak();
-      fetchWeightLogs();
-      fetchBodyFatLogs();
-      fetchExerciseLogs(selectedDate);
-      fetchDailyHistory();
-      fetchWater(selectedDate);
-      fetchProfile();
-      fetchAdminStats();
+      fetchDashboard(selectedDate);
     }
   }, [token]); // eslint-disable-line
 
@@ -833,16 +883,19 @@ function App() {
     setAdminLoading(false);
   };
 
+  const applyProfile = (p) => {
+    if (p && p.age && p.weightLbs && p.heightFeet && p.sex && p.goal && p.activity) {
+      const next = { age: p.age, weightLbs: p.weightLbs, heightFeet: p.heightFeet, heightInches: p.heightInches,
+        sex: p.sex, activity: p.activity, goal: p.goal, units: p.units === 'metric' ? 'metric' : 'imperial' };
+      setProfile(next);
+      try { localStorage.setItem('profile', JSON.stringify(next)); } catch { /* ignore */ }
+    }
+  };
+
   const fetchProfile = async () => {
     try {
       const res = await axios.get(`${API}/profile`, { headers: { Authorization: `Bearer ${token}` } });
-      const p = res.data;
-      if (p && p.age && p.weightLbs && p.heightFeet && p.sex && p.goal && p.activity) {
-        const next = { age: p.age, weightLbs: p.weightLbs, heightFeet: p.heightFeet, heightInches: p.heightInches,
-          sex: p.sex, activity: p.activity, goal: p.goal, units: p.units === 'metric' ? 'metric' : 'imperial' };
-        setProfile(next);
-        try { localStorage.setItem('profile', JSON.stringify(next)); } catch { /* ignore */ }
-      }
+      applyProfile(res.data);
     } catch { /* offline: keep the cached profile */ }
   };
 
@@ -1291,15 +1344,6 @@ function App() {
   };
 
 
-  useEffect(() => {
-    if (token) {
-      fetchSupplements();
-      fetchSleep();
-      fetchMood();
-      fetchCustomFoods();
-    }
-  // eslint-disable-next-line
-  }, [token]);
 
   // Food photos: ask our server once per food per session. The server looks up a few
   // new foods per call, so anything still missing is asked for once more shortly after.
