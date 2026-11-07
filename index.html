@@ -109,19 +109,6 @@
       </main>
     </div>
 
-    <script>
-      // Hide loading screen when React loads
-      window.addEventListener('load', function() {
-        setTimeout(function() {
-          var loading = document.getElementById('loading');
-          if (loading) {
-            loading.style.opacity = '0';
-            loading.style.transition = 'opacity 0.3s ease';
-            setTimeout(function() { loading.style.display = 'none'; }, 300);
-          }
-        }, 800);
-      });
-    </script>
     <script type="module" src="/src/index.jsx"></script>
   </body>
 </html>

@@ -1,5 +1,5 @@
 // Bump the version whenever the caching rules change so old caches are dropped.
-const CACHE_NAME = 'lifeos-v2';
+const CACHE_NAME = 'lifeos-v3';
 // Only files that exist in every build. Built JS/CSS have hashed names, so they
 // are cached on first use by the fetch handler instead of listed here. (v1 listed
 // /static/js/bundle.js, which only exists in dev, so install always failed.)
@@ -38,7 +38,9 @@ self.addEventListener('fetch', event => {
   if (event.request.url.includes('/api/') ||
       event.request.url.includes('localhost:8080') ||
       event.request.url.includes('nal.usda.gov') ||
-      event.request.url.includes('googleapis.com')) {
+      event.request.url.includes('googleapis.com') ||
+      event.request.url.includes('openfoodfacts.org') ||
+      event.request.url.includes('unsplash.com')) {
     return;
   }
 

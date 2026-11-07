@@ -25,6 +25,10 @@ and ask an AI coach for advice that is based on their own logs.
   body fat tape measurements and the dashboard; the first choice follows the browser's
   region and is saved to the account. Values are stored in imperial, so nothing on the
   server had to migrate; the AI coach answers in the user's units.
+- **Accessible and locked down:** 0 WCAG 2.1 AA problems in an axe scan of 24 views
+  (light and dark), a strict Content-Security-Policy with no inline scripts, the Inter
+  font served from our own site (no Google Fonts), and dates in the user's regional
+  order ([docs/accessibility-and-headers.md](docs/accessibility-and-headers.md)).
 - **Your data, your call:** download everything as JSON or delete the account (password +
   "DELETE"; every row removed in one transaction, all sessions end at once), and a
   [privacy policy](https://www.lifeoshealth.com/privacy.html) ([docs/account-and-privacy.md](docs/account-and-privacy.md)).
