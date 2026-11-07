@@ -6,6 +6,7 @@ import './AppShell.css';
 import Dashboard from './dashboard/Dashboard';
 import Icon from './components/Icon';
 import FoodThumb, { PhotoCredit } from './components/FoodThumb';
+import AccountData from './components/AccountData';
 
 const API = import.meta.env.REACT_APP_API_URL || 'http://localhost:8080/api';
 
@@ -159,6 +160,7 @@ function App() {
   const [authPassword, setAuthPassword] = useState('');
   const [authName, setAuthName] = useState('');
   const [authMessage, setAuthMessage] = useState('');
+  const [agreedPrivacy, setAgreedPrivacy] = useState(false);
   // Sign-up is two steps: account details, then "about you" (needed for accurate goals).
   const [regStep, setRegStep] = useState(1);
   const [foodLogs, setFoodLogs] = useState([]);
@@ -737,6 +739,10 @@ function App() {
 
   const handleAuth = async () => {
     if (authMode === 'register' && regStep === 1) return continueRegistration();
+    if (authMode === 'register' && !agreedPrivacy) {
+      setAuthMessage('Please agree to the Privacy Policy to create your account.');
+      return;
+    }
     try {
       const url = authMode === 'login' ? `${API}/auth/login` : `${API}/auth/register`;
       const body = authMode === 'login'
@@ -1415,6 +1421,10 @@ function App() {
                       <option value="veryactive">Very active (hard training or physical job)</option>
                     </select></div>
                   <div className="auth-goal-preview">Your starting goal: <strong>{dailyGoal} kcal</strong> · {proteinGoal} g protein per day</div>
+                  <label className="auth-consent">
+                    <input type="checkbox" checked={agreedPrivacy} onChange={e => setAgreedPrivacy(e.target.checked)} />
+                    <span>I agree to the <a href="/privacy.html" target="_blank" rel="noopener">Privacy Policy</a> and to LifeOS storing the health data I log (weight, food, sleep and similar) to run the app.</span>
+                  </label>
                   {authMessage && <p className="auth-error">{authMessage}</p>}
                   <button className="auth-btn" onClick={handleAuth}>Create Account</button>
                   <p className="auth-switch"><span onClick={() => { setRegStep(1); setAuthMessage(''); }}>← Back</span></p>
@@ -1440,6 +1450,7 @@ function App() {
                     {authMode === 'login' ? 'Sign Up' : 'Sign In'}
                   </span>
                 </p>
+                <p className="auth-legal"><a href="/privacy.html" target="_blank" rel="noopener">Privacy Policy</a></p>
                 </>)}
               </>
             )}
@@ -2495,6 +2506,7 @@ function App() {
               <button className="profile-save-btn" onClick={saveProfile}>{profileSaved ? '✅ Saved!' : 'Save Profile'}</button>
               {profileError && <p className="form-error" role="alert">{profileError}</p>}
             </div>
+            <AccountData api={API} token={token} onDeleted={() => { logout(); setAuthMessage('Your account and all your data were deleted.'); }} />
           </div>
         )}
 

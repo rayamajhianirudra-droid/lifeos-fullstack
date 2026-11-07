@@ -86,3 +86,27 @@ body.dark .food-thumb { background: linear-gradient(135deg, rgba(91, 79, 212, .2
 .portion-photo .food-thumb { border-radius: 16px; }
 .photo-credit { margin: 0; font-size: 11.5px; color: var(--color-ink-secondary); }
 .photo-credit a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+
+/* Sign-up consent, legal link */
+.auth-consent { display: flex; gap: 10px; align-items: flex-start; margin: 14px 0 6px; font-size: 13px; line-height: 1.45; color: var(--color-ink-secondary); text-align: left; cursor: pointer; }
+.auth-consent input { margin-top: 2px; width: 16px; height: 16px; flex: none; accent-color: #5B4FD4; }
+.auth-consent a, .auth-legal a { color: #5B4FD4; }
+.auth-legal { margin: 10px 0 0; text-align: center; font-size: 12.5px; }
+
+/* Profile > Your data */
+.account-data { margin-top: 18px; }
+.account-data .profile-sub a { color: var(--color-primary); }
+.account-data-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+.account-btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 16px; border-radius: 12px; border: 1px solid var(--color-border);
+  background: var(--color-surface); color: var(--color-ink); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
+.account-btn:hover:not(:disabled) { background: var(--color-surface-raised); }
+.account-btn:disabled { opacity: .6; cursor: default; }
+.account-btn.is-danger { color: #B42318; border-color: rgba(180, 35, 24, .35); }
+.account-btn.is-danger-solid { background: #B42318; border-color: #B42318; color: #fff; }
+.account-btn:focus-visible { outline: 2px solid var(--color-primary-muted); outline-offset: 2px; }
+.account-note { margin: 10px 0 0; font-size: 13px; color: var(--color-ink-secondary); }
+.account-delete { margin-top: 14px; padding: 16px; border-radius: 14px; border: 1px solid rgba(180, 35, 24, .3); background: rgba(180, 35, 24, .04);
+  display: grid; gap: 6px; }
+.account-delete label { font-size: 13px; font-weight: 600; margin-top: 6px; }
+.account-warning { margin: 0 0 4px; font-size: 13.5px; color: #B42318; }
+body.dark .account-btn.is-danger, body.dark .account-warning { color: #FF8A80; }
