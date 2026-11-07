@@ -22,15 +22,16 @@ import java.util.regex.Pattern;
  * Sources, in order:
  *  1. Open Food Facts, by barcode, for branded foods: the real package photo.
  *     Free, no key. Images are CC BY-SA; the app credits "Open Food Facts".
- *  2. Pexels, by a simplified food name ("Chicken, broiler or fryers, breast,
- *     roasted" becomes "chicken breast"): a stock photo of that food. Needs
- *     PEXELS_API_KEY; without it this source is skipped and nothing breaks.
+ *  2. A stock photo found by a simplified food name ("Chicken, broiler or fryers,
+ *     breast, roasted" becomes "chicken breast"), from Unsplash when
+ *     UNSPLASH_ACCESS_KEY is set, otherwise Pexels when PEXELS_API_KEY is set.
+ *     With neither key this step is skipped and nothing breaks.
  *
  * Privacy: only the food name or barcode leaves the server, never anything about the
  * user. Results (found or not) are cached in the food_images table so the external
  * services are asked about each food once in a long while, which also keeps us far
  * inside their free limits (Open Food Facts asks for at most 15 product reads a
- * minute, Pexels allows 200 searches an hour).
+ * minute, Unsplash allows 50 searches an hour before production approval, Pexels 200).
  *
  * Only https URLs on the sources' own image hosts are ever returned to the browser.
  */
@@ -42,6 +43,10 @@ public class FoodImageService {
     /** Overridable only for automated tests; production always uses the real endpoints. */
     private static final String PEXELS_BASE = System.getenv().getOrDefault(
             "PEXELS_BASE_URL", "https://api.pexels.com/v1/search");
+    private static final String UNSPLASH_BASE = System.getenv().getOrDefault(
+            "UNSPLASH_BASE_URL", "https://api.unsplash.com/search/photos");
+    /** Unsplash asks every credit link to carry these, so photographers see where views come from. */
+    static final String UNSPLASH_UTM = "utm_source=lifeos_health&utm_medium=referral";
     private static final String OFF_BASE = System.getenv().getOrDefault(
             "OFF_BASE_URL", "https://world.openfoodfacts.org/api/v2/product/");
     /** Open Food Facts asks every app to identify itself. */
@@ -49,6 +54,7 @@ public class FoodImageService {
 
     static final List<String> ALLOWED_IMAGE_PREFIXES = List.of(
             "https://images.pexels.com/",
+            "https://images.unsplash.com/",
             "https://images.openfoodfacts.org/",
             "https://static.openfoodfacts.org/");
 
@@ -60,6 +66,8 @@ public class FoodImageService {
     static final int MAX_NEW_PER_REQUEST = 10;
     private static final int OFF_PER_MINUTE = 10;
     private static final int PEXELS_PER_HOUR = 180;
+    /** Unsplash allows 50 searches an hour until the app is approved for production (then 1,000). */
+    private static final int UNSPLASH_PER_HOUR = intEnv("UNSPLASH_PER_HOUR", 45);
 
     private static final Pattern DIGITS = Pattern.compile("\\d{8,14}");
 
@@ -70,6 +78,9 @@ public class FoodImageService {
             .defaultHeader("User-Agent", USER_AGENT)
             .build();
     private final String pexelsKey = trimOrNull(System.getenv("PEXELS_API_KEY"));
+    /** Unsplash "Access Key" (public id of the app); the Secret Key is never needed here. */
+    private final String unsplashKey = trimOrNull(System.getenv("UNSPLASH_ACCESS_KEY"));
+    private volatile long unsplashPausedUntil = 0;
     /** When Pexels says the hourly quota is nearly used up, wait until it resets. */
     private volatile long pexelsPausedUntil = 0;
 
@@ -183,7 +194,9 @@ public class FoodImageService {
 
     /** Empty when the source could not be asked or failed: nothing is cached then, so we retry later. */
     private Mono<FoodImage> lookup(String key) {
-        return key.startsWith("upc:") ? openFoodFacts(key) : pexels(key);
+        if (key.startsWith("upc:")) return openFoodFacts(key);
+        // Unsplash when its key is set, otherwise Pexels (Pexels paused new keys in Nov 2026).
+        return unsplashKey != null ? unsplash(key) : pexels(key);
     }
 
     @SuppressWarnings("unchecked")
@@ -244,8 +257,10 @@ public class FoodImageService {
                         Object photos = body.get("photos");
                         if (photos instanceof List<?> list && !list.isEmpty() && list.get(0) instanceof Map<?, ?> p) {
                             Object src = p.get("src");
-                            Object tiny = src instanceof Map<?, ?> s ? s.get("tiny") : null;
-                            if (tiny instanceof String u && isAllowedImageUrl(u)) {
+                            // "medium" is about 350 px tall: sharp on phone and retina screens
+                            // ("tiny" at 200 px looked soft). Fall back to "small" if missing.
+                            Object medium = src instanceof Map<?, ?> s ? (s.get("medium") != null ? s.get("medium") : s.get("small")) : null;
+                            if (medium instanceof String u && isAllowedImageUrl(u)) {
                                 String who = p.get("photographer") instanceof String n ? clip(n, 120) : "Pexels";
                                 String page = p.get("url") instanceof String pu && pu.startsWith("https://www.pexels.com/")
                                         ? clip(pu, 500) : "https://www.pexels.com";
@@ -258,6 +273,67 @@ public class FoodImageService {
                 .timeout(CALL_TIMEOUT)
                 .onErrorResume(e -> {
                     log.warn("FOOD PHOTO ERROR: Pexels {}", e.getClass().getSimpleName());
+                    return Mono.empty();
+                });
+    }
+
+    @SuppressWarnings("unchecked")
+    private Mono<FoodImage> unsplash(String term) {
+        if (System.currentTimeMillis() < unsplashPausedUntil) return Mono.empty();
+        if (!limiter.tryAcquire("photos:unsplash", UNSPLASH_PER_HOUR, Duration.ofHours(1))) return Mono.empty();
+        return webClient.get()
+                .uri(UNSPLASH_BASE, b -> b
+                        .queryParam("query", term + " food")
+                        .queryParam("per_page", 1)
+                        .queryParam("orientation", "squarish")
+                        .queryParam("content_filter", "high")
+                        .build())
+                .header("Authorization", "Client-ID " + unsplashKey)
+                .header("Accept-Version", "v1")
+                .exchangeToMono(resp -> {
+                    // No reset time is sent: the quota refills within the hour.
+                    List<String> left = resp.headers().header("X-Ratelimit-Remaining");
+                    try {
+                        if (!left.isEmpty() && Integer.parseInt(left.get(0).trim()) < 3) {
+                            unsplashPausedUntil = System.currentTimeMillis() + Duration.ofHours(1).toMillis();
+                        }
+                    } catch (NumberFormatException ignored) {
+                        // Odd header: rely on our own hourly limit.
+                    }
+                    if (resp.statusCode().value() == 429 || resp.statusCode().value() == 403) {
+                        unsplashPausedUntil = System.currentTimeMillis() + Duration.ofMinutes(30).toMillis();
+                    }
+                    if (!resp.statusCode().is2xxSuccessful()) {
+                        log.warn("FOOD PHOTO ERROR: Unsplash {}", resp.statusCode().value());
+                        return resp.releaseBody().then(Mono.empty());
+                    }
+                    return resp.bodyToMono(Map.class).map(body -> {
+                        Object results = body.get("results");
+                        if (results instanceof List<?> list && !list.isEmpty() && list.get(0) instanceof Map<?, ?> p) {
+                            Object urls = p.get("urls");
+                            // "small" is 400 px wide; Unsplash requires using its URLs as given (they keep ixid).
+                            Object small = urls instanceof Map<?, ?> m ? m.get("small") : null;
+                            if (small instanceof String u && isAllowedImageUrl(u)) {
+                                Object user = p.get("user");
+                                String who = "Unsplash";
+                                String page = "https://unsplash.com/?" + UNSPLASH_UTM;
+                                if (user instanceof Map<?, ?> um) {
+                                    if (um.get("name") instanceof String n && !n.isBlank()) who = clip(n, 120);
+                                    Object links = um.get("links");
+                                    if (links instanceof Map<?, ?> lm && lm.get("html") instanceof String h
+                                            && h.startsWith("https://unsplash.com/") && h.length() < 400 && !h.contains("?")) {
+                                        page = h + "?" + UNSPLASH_UTM;
+                                    }
+                                }
+                                return new FoodImage(term, u, who, page, "unsplash", true);
+                            }
+                        }
+                        return miss(term, "unsplash");
+                    });
+                })
+                .timeout(CALL_TIMEOUT)
+                .onErrorResume(e -> {
+                    log.warn("FOOD PHOTO ERROR: Unsplash {}", e.getClass().getSimpleName());
                     return Mono.empty();
                 });
     }
@@ -343,6 +419,15 @@ public class FoodImageService {
     private static String clip(String s, int max) {
         String t = s.trim();
         return t.length() > max ? t.substring(0, max) : t;
+    }
+
+    private static int intEnv(String name, int fallback) {
+        try {
+            String v = System.getenv(name);
+            return v == null ? fallback : Math.max(1, Integer.parseInt(v.trim()));
+        } catch (NumberFormatException e) {
+            return fallback;
+        }
     }
 
     private static String trimOrNull(String v) {

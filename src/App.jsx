@@ -5,7 +5,7 @@ import './App.css';
 import './AppShell.css';
 import Dashboard from './dashboard/Dashboard';
 import Icon from './components/Icon';
-import FoodThumb from './components/FoodThumb';
+import FoodThumb, { PhotoCredit } from './components/FoodThumb';
 
 const API = import.meta.env.REACT_APP_API_URL || 'http://localhost:8080/api';
 
@@ -1727,6 +1727,12 @@ function App() {
                           const pm = valid ? portionMacros(food, portion, qtyNum) : null;
                           return (
                             <div className="portion-picker">
+                              {foodPhotos[photoKey(food)] && (
+                                <div className="portion-photo">
+                                  <FoodThumb photo={foodPhotos[photoKey(food)]} size={72} />
+                                  <PhotoCredit photo={foodPhotos[photoKey(food)]} />
+                                </div>
+                              )}
                               <label className="portion-field">
                                 <span>Amount</span>
                                 <input type="number" inputMode="decimal" min="0.25" max="100" step="0.25"
@@ -1762,7 +1768,7 @@ function App() {
                     );
                   })}
                   <p className="result-source">
-                    Nutrition data: USDA FoodData Central · Photos: <a href="https://www.pexels.com" target="_blank" rel="noopener noreferrer">Pexels</a> and <a href="https://world.openfoodfacts.org" target="_blank" rel="noopener noreferrer">Open Food Facts</a>
+                    Nutrition data: USDA FoodData Central · Photos: <a href="https://unsplash.com/?utm_source=lifeos_health&utm_medium=referral" target="_blank" rel="noopener noreferrer">Unsplash</a> and <a href="https://world.openfoodfacts.org" target="_blank" rel="noopener noreferrer">Open Food Facts</a>
                   </p>
                 </div>
               )}

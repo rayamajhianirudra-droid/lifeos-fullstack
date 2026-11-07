@@ -94,7 +94,7 @@ meantime, so set `USDA_API_KEY` on Railway first (food search needs it).
    | `GEMINI_API_KEY` | Same as Railway |
    | `USDA_API_KEY` | Same as Railway |
    | `CLIENT_IP_HEADER` | `True-Client-IP` (already filled by the Blueprint) |
-   | `PEXELS_API_KEY` | Optional. Food photos for plain foods, see [food-photos.md](food-photos.md) |
+   | `UNSPLASH_ACCESS_KEY` | Optional. Food photos for plain foods, see [food-photos.md](food-photos.md) |
 
    `VAPID_*` and `MAIL_*` are not read by the code today; do not copy them.
 4. Wait for the first deploy, then open
