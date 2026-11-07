@@ -12,6 +12,10 @@ and ask an AI coach for advice that is based on their own logs.
 
 - **Food logging** backed by USDA FoodData Central: server-side search, real
   serving sizes (for example 1 sandwich, 1 medium banana) and per-portion macros.
+- **Metric or imperial:** kg and cm (or lb and ft/in) for sign-up, profile, weight log,
+  body fat tape measurements and the dashboard; the first choice follows the browser's
+  region and is saved to the account. Values are stored in imperial, so nothing on the
+  server had to migrate; the AI coach answers in the user's units.
 - **Your data, your call:** download everything as JSON or delete the account (password +
   "DELETE"; every row removed in one transaction, all sessions end at once), and a
   [privacy policy](https://www.lifeoshealth.com/privacy.html) ([docs/account-and-privacy.md](docs/account-and-privacy.md)).

@@ -139,4 +139,16 @@ class CoachContextServiceTest {
         w.setWeightLbs(lbs); w.setDate(d);
         return w;
     }
+
+    @Test
+    void asksForMetricAnswersOnlyForMetricUsers() {
+        Map<String, Object> metric = new java.util.HashMap<>(profile());
+        metric.put("units", "metric");
+        assertTrue(service.build(USER, day, metric).contains("UNITS: the user uses metric"));
+        assertFalse(service.build(USER, day, profile()).contains("UNITS:"));
+        Map<String, Object> junk = new java.util.HashMap<>(profile());
+        junk.put("units", "metric\nZZ_INJECTED_ZZ");
+        String j = service.build(USER, day, junk);
+        assertFalse(j.contains("ZZ_INJECTED_ZZ") || j.contains("UNITS:"), j);
+    }
 }

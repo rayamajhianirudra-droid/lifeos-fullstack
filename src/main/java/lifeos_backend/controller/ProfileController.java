@@ -60,6 +60,8 @@ public class ProfileController {
         u.setSex(sex);
         u.setGoal(goal);
         u.setActivity(activity);
+        Object units = body.get("units");
+        if (units != null) u.setUnits(str(units));
         Object name = body.get("name");
         if (name != null && !name.toString().isBlank() && name.toString().length() <= 60) u.setName(name.toString().trim());
         return ResponseEntity.ok(toMap(userRepository.save(u)));
@@ -75,6 +77,7 @@ public class ProfileController {
         m.put("heightInches", u.getHeightInches());
         m.put("goal", u.getGoal());
         m.put("activity", u.getActivity());
+        m.put("units", u.getUnits());
         return m;
     }
 

@@ -76,6 +76,10 @@ public class CoachContextService {
         appendIf(sb, "daily calorie goal", calGoal, " kcal");
         appendIf(sb, "protein goal", proteinGoal, " g");
         sb.append('\n');
+        // Weights above are in lb for the model's arithmetic; answer in the user's own units.
+        if ("metric".equals(oneOf(p, "units", Set.of("metric", "imperial")))) {
+            sb.append("UNITS: the user uses metric. Give body weight in kg, height and measurements in cm, fluids in ml.\n");
+        }
 
         // --- Today ---
         List<FoodLog> todayFoods = foods.stream().filter(f -> day.equals(f.getDate())).toList();

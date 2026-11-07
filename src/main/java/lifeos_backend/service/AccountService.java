@@ -57,6 +57,7 @@ public class AccountService {
         profile.put("goal", u.getGoal());
         profile.put("activity", u.getActivity());
         profile.put("sex", u.getSex());
+        profile.put("units", u.getUnits());
         profile.put("createdAt", u.getCreatedAt() == null ? null : u.getCreatedAt().toString());
         out.put("profile", profile);
 
