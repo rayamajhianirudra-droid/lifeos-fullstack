@@ -7,6 +7,8 @@ import Dashboard from './dashboard/Dashboard';
 import Icon from './components/Icon';
 import FoodThumb, { PhotoCredit } from './components/FoodThumb';
 import AccountData from './components/AccountData';
+import { ConvertedNumberInput, UnitsToggle } from './components/UnitInputs';
+import { isMetric, lbToKg, kgToLb, inToCm, cmToIn, weightIn, weightUnit, fmtWeight, fmtHeight, ftInFromInches, lengthUnit, toInches, defaultUnits, weightRangeText } from './units';
 
 const API = import.meta.env.REACT_APP_API_URL || 'http://localhost:8080/api';
 
@@ -204,9 +206,9 @@ function App() {
 
   const [profile, setProfile] = useState(() => {
     const saved = localStorage.getItem('profile');
-    return saved ? JSON.parse(saved) : {
+    return saved ? { units: defaultUnits(), ...JSON.parse(saved) } : {
       age: 25, weightLbs: 170, heightFeet: 5, heightInches: 10,
-      sex: 'male', activity: 'moderate', goal: 'maintain'
+      sex: 'male', activity: 'moderate', goal: 'maintain', units: defaultUnits()
     };
   });
   const [profileSaved, setProfileSaved] = useState(false);
@@ -475,14 +477,16 @@ function App() {
 
   const logWeight = async () => {
     if (!weightLbs) return;
+    const typed = parseFloat(weightLbs);   // in the user's units
+    const lbs = isMetric(profile.units) ? kgToLb(typed) : typed;
     try {
       await axios.post(`${API}/weight`, {
-        weightLbs: parseFloat(weightLbs), date: toLocalISO()
+        weightLbs: Math.round(lbs * 10) / 10, date: toLocalISO()
       }, { headers: { Authorization: `Bearer ${token}` } });
       setWeightLbs('');
       fetchWeightLogs();
       fetchProfile();   // the server updates the profile weight, which drives your goals
-    } catch { setMessage('❌ Enter a weight between 50 and 1000 lbs.'); }
+    } catch { setMessage(`❌ Enter a weight ${weightRangeText(profile.units)}.`); }
   };
 
   const deleteWeight = async (id) => {
@@ -505,9 +509,9 @@ function App() {
       await axios.post(`${API}/bodyfat`, {
         sex: profile.sex,
         heightInches: heightInchesTotal,
-        waistInches: parseFloat(waistInches),
-        neckInches: parseFloat(neckInches),
-        hipInches: profile.sex === 'female' ? parseFloat(hipInches) : null,
+        waistInches: toInches(parseFloat(waistInches), profile.units),
+        neckInches: toInches(parseFloat(neckInches), profile.units),
+        hipInches: profile.sex === 'female' ? toInches(parseFloat(hipInches), profile.units) : null,
         date: toLocalISO(),
       }, { headers: { Authorization: `Bearer ${token}` } });
       setWaistInches(''); setNeckInches(''); setHipInches('');
@@ -592,7 +596,7 @@ function App() {
         profile: {
           age: profile.age, sex: profile.sex, weightLbs: profile.weightLbs,
           heightFeet: profile.heightFeet, heightInches: profile.heightInches,
-          goal: profile.goal, activity: profile.activity,
+          goal: profile.goal, activity: profile.activity, units: profile.units,
           dailyGoal, proteinGoal, waterGlasses: water,
         },
         // Prior turns only (the backend appends `message` itself); capped to bound token cost.
@@ -750,7 +754,7 @@ function App() {
         : { name: authName.trim(), email: authEmail.trim(), password: authPassword,
             age: profile.age, weightLbs: profile.weightLbs,
             heightFeet: profile.heightFeet, heightInches: profile.heightInches,
-            goal: profile.goal, activity: profile.activity, sex: profile.sex };
+            goal: profile.goal, activity: profile.activity, sex: profile.sex, units: profile.units };
       const res = await axios.post(url, body);
       localStorage.setItem('token', res.data.token);
       localStorage.setItem('userName', res.data.name);
@@ -830,7 +834,7 @@ function App() {
       const p = res.data;
       if (p && p.age && p.weightLbs && p.heightFeet && p.sex && p.goal && p.activity) {
         const next = { age: p.age, weightLbs: p.weightLbs, heightFeet: p.heightFeet, heightInches: p.heightInches,
-          sex: p.sex, activity: p.activity, goal: p.goal };
+          sex: p.sex, activity: p.activity, goal: p.goal, units: p.units === 'metric' ? 'metric' : 'imperial' };
         setProfile(next);
         try { localStorage.setItem('profile', JSON.stringify(next)); } catch { /* ignore */ }
       }
@@ -845,6 +849,20 @@ function App() {
     const result = await Notification.requestPermission();
     setNotifPermission(result);
   };
+  // Switching units only changes how numbers are shown, so save it straight away.
+  const changeUnits = async (units) => {
+    setProfile(p => ({ ...p, units }));
+    try {
+      const saved = JSON.parse(localStorage.getItem('profile') || 'null');
+      if (saved) localStorage.setItem('profile', JSON.stringify({ ...saved, units }));
+    } catch { /* ignore */ }
+    if (!token) return;
+    try {
+      const res = await axios.get(`${API}/profile`, { headers: { Authorization: `Bearer ${token}` } });
+      await axios.put(`${API}/profile`, { ...res.data, units }, { headers: { Authorization: `Bearer ${token}` } });
+    } catch { /* the next Save Profile will store it */ }
+  };
+
   const saveProfile = async () => {
     setProfileError('');
     try {
@@ -1381,6 +1399,8 @@ function App() {
                 {authMode === 'register' && regStep === 2 ? (<>
                   <h2 className="auth-title">About you</h2>
                   <p className="auth-subtitle">Step 2 of 2 · Used only to calculate your calorie and protein goals</p>
+                  <div className="input-group"><label id="reg-units">Units</label>
+                    <UnitsToggle id="reg-units" units={profile.units} onChange={u => setProfile(p => ({ ...p, units: u }))} /></div>
                   <div className="input-group"><label>Sex (for metabolic rate)</label>
                     <div className="profile-options">
                       {['male', 'female'].map(sx => (
@@ -1392,10 +1412,16 @@ function App() {
                     <div className="input-group"><label htmlFor="reg-age">Age</label>
                       <input id="reg-age" className="auth-input" type="number" min="13" max="100" value={profile.age}
                         onChange={e => setProfile({ ...profile, age: parseInt(e.target.value, 10) || 0 })}/></div>
-                    <div className="input-group"><label htmlFor="reg-weight">Weight (lbs)</label>
-                      <input id="reg-weight" className="auth-input" type="number" step="0.1" min="50" max="1000" value={profile.weightLbs}
-                        onChange={e => setProfile({ ...profile, weightLbs: parseFloat(e.target.value) || 0 })}/></div>
+                    <div className="input-group"><label htmlFor="reg-weight">Weight ({weightUnit(profile.units)})</label>
+                      <ConvertedNumberInput id="reg-weight" className="auth-input" step="0.1" value={profile.weightLbs}
+                        toDisplay={v => isMetric(profile.units) ? lbToKg(v) : v} fromDisplay={n => isMetric(profile.units) ? kgToLb(n) : n}
+                        onValue={v => setProfile(p => ({ ...p, weightLbs: Math.round(v * 10) / 10 }))} /></div>
                   </div>
+                  {isMetric(profile.units) ? (
+                    <div className="input-group"><label htmlFor="reg-cm">Height (cm)</label>
+                      <ConvertedNumberInput id="reg-cm" className="auth-input" decimals={0} value={profile.heightFeet * 12 + profile.heightInches}
+                        toDisplay={inToCm} fromDisplay={cmToIn} onValue={v => setProfile(p => ({ ...p, ...ftInFromInches(v) }))} /></div>
+                  ) : (
                   <div className="auth-row">
                     <div className="input-group"><label htmlFor="reg-ft">Height (ft)</label>
                       <input id="reg-ft" className="auth-input" type="number" min="3" max="8" value={profile.heightFeet}
@@ -1404,6 +1430,7 @@ function App() {
                       <input id="reg-in" className="auth-input" type="number" min="0" max="11" value={profile.heightInches}
                         onChange={e => setProfile({ ...profile, heightInches: parseInt(e.target.value, 10) || 0 })}/></div>
                   </div>
+                  )}
                   <div className="input-group"><label>Goal</label>
                     <div className="profile-options">
                       {[{ v: 'lose', l: 'Lose weight' }, { v: 'maintain', l: 'Maintain' }, { v: 'gain', l: 'Build muscle' }].map(g => (
@@ -1670,7 +1697,7 @@ function App() {
               focus: dailyFocus,
               history: dailyHistory,
               weightLogs, bodyFatLogs,
-              weight: latestWeight, bodyFat: latestBodyFat,
+              weight: latestWeight, bodyFat: latestBodyFat, units: profile.units,
               bmi, bmiLabel, bmiTone,
               foodLogs,
               foodPhotos,
@@ -2094,14 +2121,14 @@ function App() {
                   </div>
                   <div className={`weight-delta-badge ${weightLogs[0].weightLbs <= weightLogs[weightLogs.length-1].weightLbs ? 'weight-delta-down' : 'weight-delta-up'}`}>
                     {weightLogs[0].weightLbs <= weightLogs[weightLogs.length-1].weightLbs
-                      ? `📉 −${(weightLogs[weightLogs.length-1].weightLbs - weightLogs[0].weightLbs).toFixed(1)} lbs`
-                      : `📈 +${(weightLogs[0].weightLbs - weightLogs[weightLogs.length-1].weightLbs).toFixed(1)} lbs`}
+                      ? `📉 −${fmtWeight(weightLogs[weightLogs.length-1].weightLbs - weightLogs[0].weightLbs, profile.units)}`
+                      : `📈 +${fmtWeight(weightLogs[0].weightLbs - weightLogs[weightLogs.length-1].weightLbs, profile.units)}`}
                   </div>
                 </div>
                 <ResponsiveContainer width="100%" height={180}>
                   <AreaChart data={[...weightLogs].reverse().slice(-(chartRange === '7D' ? 7 : chartRange === '30D' ? 30 : 90)).map(w => ({
                     date: shortDate(w.date),
-                    weight: w.weightLbs
+                    weight: weightIn(w.weightLbs, profile.units)
                   }))}>
                     <defs>
                       <linearGradient id="weightGrad" x1="0" y1="0" x2="0" y2="1">
@@ -2114,7 +2141,7 @@ function App() {
                     <YAxis tick={{fontSize:10,fill:'var(--color-ink-tertiary)'}} axisLine={false} tickLine={false} domain={['dataMin - 2','dataMax + 2']} width={36}/>
                     <Tooltip {...tooltipStyle}/>
                     <Area type="monotone" dataKey="weight" stroke="#1D9E75" strokeWidth={2.5}
-                      fill="url(#weightGrad)" dot={false} activeDot={{r:5,fill:'#1D9E75'}} name="Weight (lbs)"/>
+                      fill="url(#weightGrad)" dot={false} activeDot={{r:5,fill:'#1D9E75'}} name={`Weight (${weightUnit(profile.units)})`}/>
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
@@ -2153,7 +2180,7 @@ function App() {
                 <div className="analytics-card-title">⚖️ Log Weight</div>
               </div>
               <div className="weight-input-row">
-                <input type="number" className="weight-input" placeholder="Enter weight (lbs)"
+                <input type="number" inputMode="decimal" className="weight-input" aria-label={`Weight in ${weightUnit(profile.units)}`} placeholder={`Enter weight (${weightUnit(profile.units)})`}
                   value={weightLbs} onChange={e => setWeightLbs(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && logWeight()}/>
                 <button className="weight-log-btn" onClick={logWeight}>Log</button>
@@ -2165,7 +2192,7 @@ function App() {
                   {weightLogs.slice(0,5).map(w => (
                     <div key={w.id} className="weight-item">
                       <span className="weight-date">{shortDate(w.date)}</span>
-                      <span className="weight-val">{w.weightLbs} lbs</span>
+                      <span className="weight-val">{fmtWeight(w.weightLbs, profile.units)}</span>
                       <button onClick={() => deleteWeight(w.id)}
                         className="weight-delete-btn"
                         onMouseOver={e=>e.currentTarget.style.color='var(--color-danger)'}
@@ -2215,22 +2242,22 @@ function App() {
               <h3 className="log-title">📏 Body Fat Calculator</h3>
               <p className="log-sub">Uses the U.S. Navy method — just a tape measure, no photos needed or stored.</p>
               <div className="profile-grid">
-                <div className="profile-field"><label>Waist (inches)</label>
-                  <input type="number" className="profile-input" placeholder="e.g. 34"
+                <div className="profile-field"><label htmlFor="bf-waist">Waist ({lengthUnit(profile.units)})</label>
+                  <input id="bf-waist" type="number" inputMode="decimal" className="profile-input" placeholder={isMetric(profile.units) ? 'e.g. 86' : 'e.g. 34'}
                     value={waistInches} onChange={e => setWaistInches(e.target.value)}/></div>
-                <div className="profile-field"><label>Neck (inches)</label>
-                  <input type="number" className="profile-input" placeholder="e.g. 15"
+                <div className="profile-field"><label htmlFor="bf-neck">Neck ({lengthUnit(profile.units)})</label>
+                  <input id="bf-neck" type="number" inputMode="decimal" className="profile-input" placeholder={isMetric(profile.units) ? 'e.g. 38' : 'e.g. 15'}
                     value={neckInches} onChange={e => setNeckInches(e.target.value)}/></div>
                 {profile.sex === 'female' && (
-                  <div className="profile-field"><label>Hip (inches)</label>
-                    <input type="number" className="profile-input" placeholder="e.g. 38"
+                  <div className="profile-field"><label htmlFor="bf-hip">Hip ({lengthUnit(profile.units)})</label>
+                    <input id="bf-hip" type="number" inputMode="decimal" className="profile-input" placeholder={isMetric(profile.units) ? 'e.g. 97' : 'e.g. 38'}
                       value={hipInches} onChange={e => setHipInches(e.target.value)}/></div>
                 )}
               </div>
               <button className="profile-save-btn" onClick={logBodyFat}>Calculate & Log</button>
               {bodyFatError && <p className="form-error" role="alert">{bodyFatError}</p>}
               <p className="log-sub" style={{marginTop:'10px'}}>
-                Uses your profile height ({profile.heightFeet}'{profile.heightInches}") and sex. The Navy method is an estimate, typically within 3-4 percentage points.
+                Uses your profile height ({fmtHeight(profile.heightFeet, profile.heightInches, profile.units)}) and sex. The Navy method is an estimate, typically within 3-4 percentage points.
               </p>
             </div>
 
@@ -2450,14 +2477,24 @@ function App() {
                 </span>
               </div>
               <div className="profile-grid">
-                <div className="profile-field"><label>Age</label>
-                  <input type="number" className="profile-input" value={profile.age} onChange={e=>setProfile({...profile,age:parseInt(e.target.value)||0})}/></div>
-                <div className="profile-field"><label>Weight (lbs)</label>
-                  <input type="number" className="profile-input" value={profile.weightLbs} step="0.1" onChange={e=>setProfile({...profile,weightLbs:parseFloat(e.target.value)||0})}/></div>
-                <div className="profile-field"><label>Height (feet)</label>
-                  <input type="number" className="profile-input" value={profile.heightFeet} onChange={e=>setProfile({...profile,heightFeet:parseInt(e.target.value)||0})}/></div>
-                <div className="profile-field"><label>Height (inches)</label>
-                  <input type="number" className="profile-input" value={profile.heightInches} onChange={e=>setProfile({...profile,heightInches:parseInt(e.target.value)||0})}/></div>
+                <div className="profile-field-full"><label id="prof-units">Units</label>
+                  <UnitsToggle id="prof-units" units={profile.units} onChange={changeUnits} /></div>
+                <div className="profile-field"><label htmlFor="prof-age">Age</label>
+                  <input id="prof-age" type="number" className="profile-input" value={profile.age} onChange={e=>setProfile({...profile,age:parseInt(e.target.value)||0})}/></div>
+                <div className="profile-field"><label htmlFor="prof-weight">Weight ({weightUnit(profile.units)})</label>
+                  <ConvertedNumberInput id="prof-weight" className="profile-input" step="0.1" value={profile.weightLbs}
+                    toDisplay={v => isMetric(profile.units) ? lbToKg(v) : v} fromDisplay={n => isMetric(profile.units) ? kgToLb(n) : n}
+                    onValue={v => setProfile(p => ({ ...p, weightLbs: Math.round(v * 10) / 10 }))} /></div>
+                {isMetric(profile.units) ? (
+                  <div className="profile-field"><label htmlFor="prof-cm">Height (cm)</label>
+                    <ConvertedNumberInput id="prof-cm" className="profile-input" decimals={0} value={profile.heightFeet * 12 + profile.heightInches}
+                      toDisplay={inToCm} fromDisplay={cmToIn} onValue={v => setProfile(p => ({ ...p, ...ftInFromInches(v) }))} /></div>
+                ) : (<>
+                  <div className="profile-field"><label htmlFor="prof-ft">Height (feet)</label>
+                    <input id="prof-ft" type="number" className="profile-input" value={profile.heightFeet} onChange={e=>setProfile({...profile,heightFeet:parseInt(e.target.value)||0})}/></div>
+                  <div className="profile-field"><label htmlFor="prof-in">Height (inches)</label>
+                    <input id="prof-in" type="number" className="profile-input" value={profile.heightInches} onChange={e=>setProfile({...profile,heightInches:parseInt(e.target.value)||0})}/></div>
+                </>)}
               </div>
               <div className="profile-field-full"><label>Sex</label>
                 <div className="profile-options">

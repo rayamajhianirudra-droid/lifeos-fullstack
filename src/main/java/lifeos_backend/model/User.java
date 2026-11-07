@@ -30,6 +30,9 @@ public class User {
     private String goal;
     private String activity;
     private String sex;
+    /** "imperial" (lb, ft/in) or "metric" (kg, cm). Display only: values are stored in imperial. Null = imperial. */
+    @Column(length = 10)
+    private String units;
 
     private LocalDateTime createdAt = LocalDateTime.now();
 
@@ -53,6 +56,10 @@ public class User {
     public void setGoal(String goal) { this.goal = goal; }
     public String getActivity() { return activity; }
     public void setActivity(String activity) { this.activity = activity; }
+    public String getUnits() { return "metric".equals(units) ? "metric" : "imperial"; }
+    public void setUnits(String units) { this.units = "metric".equals(units) ? "metric" : "imperial"; }
+    /** Server-side clock only: a client can never choose when its account was created. */
+    public void markCreatedNow() { this.createdAt = LocalDateTime.now(); }
     public String getSex() { return sex; }
     public void setSex(String sex) { this.sex = sex; }
     public LocalDateTime getCreatedAt() { return createdAt; }

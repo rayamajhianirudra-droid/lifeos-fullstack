@@ -4,6 +4,7 @@ import {
   LineChart, Line,
 } from 'recharts';
 import Icon from '../components/Icon';
+import { weightIn, weightUnit } from '../units';
 import FoodThumb from '../components/FoodThumb';
 import './Dashboard.css';
 
@@ -272,8 +273,8 @@ export default function Dashboard({ d, on }) {
             </button>
             <button type="button" className="dashx-metric" onClick={() => on.tab('progress')}>
               <div className="dashx-metric-label">Weight</div>
-              <div className="dashx-metric-val">{d.weight != null ? <>{d.weight}<small> lbs</small></> : '—'}</div>
-              {weightDelta != null && <span className="dashx-delta is-neutral">{weightDelta <= 0 ? '↓' : '↑'} {Math.abs(weightDelta)} lbs</span>}
+              <div className="dashx-metric-val">{d.weight != null ? <>{weightIn(d.weight, d.units)}<small> {weightUnit(d.units)}</small></> : '—'}</div>
+              {weightDelta != null && <span className="dashx-delta is-neutral">{weightDelta <= 0 ? '↓' : '↑'} {Math.abs(weightIn(weightDelta, d.units))} {weightUnit(d.units)}</span>}
               <Sparkline data={weights.slice(-10)} dataKey="weightLbs" color="#8B5CF6" />
             </button>
           </div>

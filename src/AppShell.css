@@ -110,3 +110,9 @@ body.dark .food-thumb { background: linear-gradient(135deg, rgba(91, 79, 212, .2
 .account-delete label { font-size: 13px; font-weight: 600; margin-top: 6px; }
 .account-warning { margin: 0 0 4px; font-size: 13.5px; color: #B42318; }
 body.dark .account-btn.is-danger, body.dark .account-warning { color: #FF8A80; }
+
+/* Units switch (sign-up and Profile) */
+.units-toggle { display: inline-flex; padding: 3px; border-radius: 12px; background: var(--color-surface-raised); border: 1px solid var(--color-border); gap: 2px; }
+.units-option { border: 0; background: none; padding: 7px 14px; border-radius: 9px; font: inherit; font-size: 13px; font-weight: 600; color: var(--color-ink-secondary); cursor: pointer; }
+.units-option.is-active { background: var(--color-surface); color: var(--color-primary); box-shadow: 0 1px 3px rgba(0, 0, 0, .08); }
+.units-option:focus-visible { outline: 2px solid var(--color-primary-muted); outline-offset: 2px; }

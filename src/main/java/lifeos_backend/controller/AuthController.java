@@ -62,6 +62,8 @@ public class AuthController {
             return ResponseEntity.badRequest().body("Email already exists!");
         }
         user.setPassword(passwordEncoder.encode(user.getPassword()));
+        user.setUnits(user.getUnits());   // only "metric" or "imperial"
+        user.markCreatedNow();            // ignore any createdAt sent by the client
         userRepository.save(user);
         String token = jwtService.generateToken(user.getEmail());
         return ResponseEntity.ok(Map.of("token", token, "name", user.getName()));
