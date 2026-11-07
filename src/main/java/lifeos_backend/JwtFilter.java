@@ -1,6 +1,7 @@
 package lifeos_backend;
 
 import lifeos_backend.repository.UserRepository;
+import lifeos_backend.service.SessionCheckCache;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -23,10 +24,12 @@ public class JwtFilter extends OncePerRequestFilter {
 
     private final JwtService jwtService;
     private final UserRepository userRepository;
+    private final SessionCheckCache sessionCache;
 
-    public JwtFilter(JwtService jwtService, UserRepository userRepository) {
+    public JwtFilter(JwtService jwtService, UserRepository userRepository, SessionCheckCache sessionCache) {
         this.jwtService = jwtService;
         this.userRepository = userRepository;
+        this.sessionCache = sessionCache;
     }
 
     /**
@@ -55,9 +58,14 @@ public class JwtFilter extends OncePerRequestFilter {
             if (jwtService.isTokenValid(token)) {
                 String email = jwtService.extractEmail(token);
                 Date issuedAt = jwtService.extractIssuedAt(token);
-                boolean current = userRepository.findByEmail(email)
-                        .map(u -> belongsToCurrentAccount(issuedAt, u.getCreatedAt()))
-                        .orElse(false);
+                SessionCheckCache.Account account = sessionCache.get(email);
+                if (account == null) {
+                    account = userRepository.findByEmail(email)
+                            .map(u -> new SessionCheckCache.Account(true, u.getCreatedAt()))
+                            .orElse(SessionCheckCache.Account.GONE);
+                    sessionCache.put(email, account);
+                }
+                boolean current = account.exists() && belongsToCurrentAccount(issuedAt, account.createdAt());
                 if (current) {
                     UsernamePasswordAuthenticationToken auth =
                             new UsernamePasswordAuthenticationToken(email, null, List.of());

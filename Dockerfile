@@ -32,7 +32,9 @@ USER lifeos
 #  - SerialGC has the smallest footprint for a single small instance
 #  - exit on OOM so the platform restarts a clean process instead of a sick one
 # Override with JAVA_TOOL_OPTIONS on a larger plan.
-ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=55 -XX:+UseSerialGC -Xss512k -XX:MaxMetaspaceSize=150m -XX:ReservedCodeCacheSize=48m -XX:+ExitOnOutOfMemoryError"
+# TieredStopAtLevel=1: only the quick JIT compiler. On Render's 0.1 CPU the full
+# optimizing compiler spends seconds of CPU after every start/wake, which users feel.
+ENV JAVA_TOOL_OPTIONS="-XX:TieredStopAtLevel=1 -XX:MaxRAMPercentage=55 -XX:+UseSerialGC -Xss512k -XX:MaxMetaspaceSize=150m -XX:ReservedCodeCacheSize=48m -XX:+ExitOnOutOfMemoryError"
 
 # The app listens on 8080 (render.yaml sets PORT=8080 so Render routes there).
 EXPOSE 8080
