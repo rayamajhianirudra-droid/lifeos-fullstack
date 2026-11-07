@@ -93,6 +93,32 @@ public class PasswordResetController {
     @Value("${resend.api.key}")
     private String resendApiKey;
 
+    /**
+     * Sender shown on reset emails. Resend's shared test sender (onboarding@resend.dev)
+     * only delivers to the Resend account owner's own inbox, so production must set
+     * RESEND_FROM to an address on a domain verified in Resend, e.g.
+     * "LifeOS Health <noreply@lifeoshealth.com>". See docs/email-setup.md.
+     */
+    @Value("${RESEND_FROM:LifeOS Health <onboarding@resend.dev>}")
+    private String resendFrom;
+
+    private static final java.util.regex.Pattern SENDER =
+            java.util.regex.Pattern.compile("^[^<>\\r\\n]{0,60}<[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}>$|^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$");
+
+    /** The configured sender if it is a plain address or "Name <address>", else the test sender. */
+    static String senderOrDefault(String configured) {
+        String v = configured == null ? "" : configured.trim();
+        return SENDER.matcher(v).matches() ? v : "LifeOS Health <onboarding@resend.dev>";
+    }
+
+    @jakarta.annotation.PostConstruct
+    void warnIfTestSender() {
+        if (senderOrDefault(resendFrom).contains("@resend.dev")) {
+            System.err.println("[PasswordReset] WARNING: RESEND_FROM is not set. Reset emails use Resend's test "
+                    + "sender, which only reaches the Resend account owner. Verify a domain and set RESEND_FROM.");
+        }
+    }
+
     private final WebClient webClient = WebClient.builder()
             .baseUrl("https://api.resend.com")
             .build();
@@ -251,7 +277,7 @@ public class PasswordResetController {
      */
     private void sendResetEmail(String toEmail, String rawToken) {
         Map<String, Object> payload = Map.of(
-                "from", "LifeOS Health <onboarding@resend.dev>",
+                "from", senderOrDefault(resendFrom),
                 "to", List.of(toEmail),
                 "subject", "LifeOS Health — Password Reset Request",
                 "text",
@@ -275,11 +301,13 @@ public class PasswordResetController {
                     .retrieve()
                     .bodyToMono(String.class)
                     .block();
-            System.out.println("Resend response: " + response);
+            // No address or token in the logs, only that it was accepted.
+            System.out.println("[PasswordReset] email accepted by Resend" + (response != null && response.contains("\"id\"") ? "" : " (no id)"));
+        } catch (org.springframework.web.reactive.function.client.WebClientResponseException e) {
+            // Status only: the body can echo the recipient. Never surface to the client.
+            System.err.println("[PasswordReset] Resend rejected the email: HTTP " + e.getStatusCode().value());
         } catch (Exception e) {
-            // Log the error — do not surface to the client (ambiguous response policy)
-            System.err.println("[PasswordReset] Resend email failed for " +
-                    toEmail + ": " + e.getMessage());
+            System.err.println("[PasswordReset] Resend email failed: " + e.getClass().getSimpleName());
         }
     }
 }

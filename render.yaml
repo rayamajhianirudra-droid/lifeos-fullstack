@@ -46,6 +46,10 @@ services:
       # Optional: food photos for plain foods. Unsplash "Access Key" (free at
       # https://unsplash.com/developers). Used before Pexels when both are set.
       # Without either, branded foods still get package photos from Open Food Facts.
+      # Sender for password reset emails, on a domain verified in Resend.
+      # See docs/email-setup.md. Example: LifeOS Health <noreply@lifeoshealth.com>
+      - key: RESEND_FROM
+        sync: false
       - key: UNSPLASH_ACCESS_KEY
         sync: false
       - key: PEXELS_API_KEY
