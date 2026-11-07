@@ -12,6 +12,11 @@ and ask an AI coach for advice that is based on their own logs.
 
 - **Food logging** backed by USDA FoodData Central: server-side search, real
   serving sizes (for example 1 sandwich, 1 medium banana) and per-portion macros.
+- **Worldwide foods:** when USDA has nothing (or on request), packaged foods from
+  150+ countries come from Open Food Facts, searched from our server with a cache and a
+  self-imposed limit under their 10 searches a minute; type a barcode to look a product
+  up; anything still missing can be added as your own food in one tap and shows up in
+  later searches ([docs/world-foods.md](docs/world-foods.md)).
 - **Metric or imperial:** kg and cm (or lb and ft/in) for sign-up, profile, weight log,
   body fat tape measurements and the dashboard; the first choice follows the browser's
   region and is saved to the account. Values are stored in imperial, so nothing on the
@@ -41,7 +46,8 @@ Browser (React SPA, Vercel)
 api.lifeoshealth.com  (Spring Boot in Docker, Render)
    |-- PostgreSQL (Neon, serverless)
    |-- USDA FoodData Central API (food search)
-   |-- Open Food Facts + Unsplash (food photos, cached in Postgres)
+   |-- Open Food Facts (worldwide foods, barcodes, package photos; cached)
+   |-- Unsplash (food photos, cached in Postgres)
    |-- Google Gemini API (AI coach, food insights)
    '-- Resend API (password reset email)
 ```

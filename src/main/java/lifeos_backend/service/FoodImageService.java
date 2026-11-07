@@ -50,7 +50,7 @@ public class FoodImageService {
     private static final String OFF_BASE = System.getenv().getOrDefault(
             "OFF_BASE_URL", "https://world.openfoodfacts.org/api/v2/product/");
     /** Open Food Facts asks every app to identify itself. */
-    private static final String USER_AGENT = "LifeOSHealth/1.0 (https://www.lifeoshealth.com)";
+    private static final String USER_AGENT = OpenFoodFactsService.USER_AGENT;
 
     static final List<String> ALLOWED_IMAGE_PREFIXES = List.of(
             "https://images.pexels.com/",
@@ -64,7 +64,6 @@ public class FoodImageService {
     private static final Duration BATCH_TIMEOUT = Duration.ofSeconds(7);
     /** New external lookups per request; the rest are fetched on later requests. */
     static final int MAX_NEW_PER_REQUEST = 10;
-    private static final int OFF_PER_MINUTE = 10;
     private static final int PEXELS_PER_HOUR = 180;
     /** Unsplash allows 50 searches an hour until the app is approved for production (then 1,000). */
     private static final int UNSPLASH_PER_HOUR = intEnv("UNSPLASH_PER_HOUR", 45);
@@ -201,7 +200,7 @@ public class FoodImageService {
 
     @SuppressWarnings("unchecked")
     private Mono<FoodImage> openFoodFacts(String key) {
-        if (!limiter.tryAcquire("photos:off", OFF_PER_MINUTE, Duration.ofMinutes(1))) return Mono.empty();
+        if (!limiter.tryAcquire(OpenFoodFactsService.PRODUCT_BUDGET_KEY, OpenFoodFactsService.PRODUCT_BUDGET_PER_MINUTE, Duration.ofMinutes(1))) return Mono.empty();
         String code = key.substring(4);
         return webClient.get()
                 .uri(OFF_BASE + code + "?fields=image_front_small_url")
