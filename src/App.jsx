@@ -153,6 +153,8 @@ function AdminDashboard({ stats, loading, error, onRefresh }) {
 
 // Branded foods share a photo per barcode, everything else per name.
 const photoKey = (food) => (food.upc ? `upc:${food.upc}` : food.name);
+// USDA foods have an fdcId; Open Food Facts foods have id "off:<barcode>".
+const resultKey = (food) => food.fdcId ?? food.id ?? `${food.name}|${food.brand || ''}`;
 
 function App() {
   const [token, setToken] = useState(localStorage.getItem('token'));
@@ -244,6 +246,9 @@ function App() {
 
   // --- Custom Food ---
   const [customFoods, setCustomFoods] = useState([]);
+  // Worldwide (Open Food Facts) search for the last query: 'idle' | 'loading' | 'done'
+  const [worldState, setWorldState] = useState('idle');
+  const [lastQuery, setLastQuery] = useState('');
   const [customFoodName, setCustomFoodName] = useState('');
   const [customFoodCal, setCustomFoodCal] = useState('');
   const [customFoodProtein, setCustomFoodProtein] = useState('');
@@ -883,18 +888,56 @@ function App() {
     const q = (typeof queryOverride === 'string' ? queryOverride : searchQuery).trim();
     if (!q || searching) return;
     setSearching(true); setSearchResults([]); setPicked(null); setMessage('');
+    setLastQuery(q); setWorldState('idle');
+    const headers = { Authorization: `Bearer ${token}` };
+    // A barcode (8-14 digits) goes straight to the barcode lookup.
+    if (/^\d{8,14}$/.test(q)) {
+      try {
+        const res = await axios.get(`${API}/foods/barcode/${q}`, { headers });
+        setSearchResults([res.data]); setWorldState('done');
+      } catch (err) {
+        setMessage(err.response?.data?.error || '❌ Barcode lookup is unavailable right now.');
+      }
+      setSearching(false);
+      return;
+    }
     try {
-      const res = await axios.get(`${API}/foods/search`, {
-        params: { q }, headers: { Authorization: `Bearer ${token}` }
-      });
+      const res = await axios.get(`${API}/foods/search`, { params: { q }, headers });
       setSearchResults(res.data);
-      if (res.data.length === 0) setMessage(`No foods found for "${q}". Try a simpler name, or create a custom food below.`);
+      if (res.data.length === 0) {
+        setSearching(false);
+        await searchWorld(q, []);   // nothing in USDA: look worldwide right away
+        return;
+      }
     } catch (err) {
       const status = err.response?.status;
       setMessage(status === 429 ? '⏳ Too many searches. Wait a minute and try again.'
         : '❌ Food search is unavailable right now. You can still log a custom food below.');
     }
     setSearching(false);
+  };
+
+  // Packaged foods from around the world (Open Food Facts), added under the USDA results.
+  const searchWorld = async (q = lastQuery, current = searchResults) => {
+    if (!q || worldState === 'loading') return;
+    setWorldState('loading'); setMessage('');
+    try {
+      const res = await axios.get(`${API}/foods/world`, { params: { q }, headers: { Authorization: `Bearer ${token}` } });
+      const have = new Set(current.map(f => f.upc).filter(Boolean));
+      const extra = (Array.isArray(res.data) ? res.data : []).filter(f => !f.upc || !have.has(f.upc));
+      setSearchResults([...current, ...extra]);
+      if (current.length === 0 && extra.length === 0) setMessage(`No foods found for "${q}" in the US or worldwide databases.`);
+    } catch (err) {
+      setMessage(err.response?.data?.error || '❌ Worldwide search is unavailable right now.');
+    }
+    setWorldState('done');
+  };
+
+  // "Can't find it?" -> open the custom food form with the name filled in.
+  const addAsCustomFood = (name) => {
+    setCustomFoodName(name.slice(0, 120));
+    setShowCustomForm(true);
+    setTimeout(() => document.getElementById('custom-foods')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
   };
 
   // Macros for `qty` x portion of a food whose values are per 100 g.
@@ -1720,7 +1763,7 @@ function App() {
           <div className="tab-content">
             <div className="log-card">
               <h3 className="log-title">Search & Log Food</h3>
-              <p className="log-sub">Search from 600,000+ real foods including restaurants</p>
+              <p className="log-sub">US foods from USDA plus packaged foods from 150+ countries. Type a name or a barcode.</p>
               <div className="meal-selector">
                 {mealCategories.map(m => (
                   <button key={m.key} className={`meal-btn ${mealType === m.key ? 'meal-btn-active' : ''}`}
@@ -1728,27 +1771,56 @@ function App() {
                 ))}
               </div>
               <div className="search-row">
-                <input className="search-input" placeholder="Try: Big Mac, Banana, Grilled Chicken..."
-                  value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+                <input className="search-input" aria-label="Search foods or enter a barcode" placeholder="Try: banana, paneer, Big Mac, or a barcode"
+                  inputMode="search" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && searchFood()}/>
                 <button className="search-btn" onClick={searchFood}>
                   {searching ? <span className="spinner"/> : '🔍'}
                 </button>
               </div>
               {message && <div className="log-message">{message}</div>}
+              {lastQuery && !searching && (() => {
+                const mine = customFoods.filter(cf => cf.foodName && cf.foodName.toLowerCase().includes(lastQuery.toLowerCase())).slice(0, 3);
+                return mine.length > 0 && (
+                  <div className="my-food-hits" aria-label="Matching foods you created">
+                    <span className="my-food-label">Your foods</span>
+                    {mine.map(cf => (
+                      <button key={cf.id} type="button" className="my-food-chip" onClick={() => logCustomFood(cf)}>
+                        + {cf.foodName} · {Math.round(cf.calories)} kcal
+                      </button>
+                    ))}
+                  </div>
+                );
+              })()}
+              {lastQuery && !searching && (
+                <div className="search-more">
+                  {worldState === 'idle' && searchResults.length > 0 && (
+                    <button type="button" className="search-more-btn" onClick={() => searchWorld()}>
+                      <Icon name="search" size={14} /> Not here? Search packaged foods worldwide
+                    </button>
+                  )}
+                  {worldState === 'loading' && <span className="search-more-note"><span className="spinner" /> Searching worldwide…</span>}
+                  {worldState === 'done' && (
+                    <button type="button" className="search-more-btn" onClick={() => addAsCustomFood(lastQuery)}>
+                      <Icon name="plus" size={14} /> Can&apos;t find it? Add &ldquo;{lastQuery.slice(0, 40)}&rdquo; as your own food
+                    </button>
+                  )}
+                </div>
+              )}
               {searchResults.length > 0 && (
                 <div className="search-results">
                   {searchResults.map((food) => {
                     const def = food.portions[0];
                     const m = portionMacros(food, def, 1);
-                    const isOpen = picked && picked.food.fdcId === food.fdcId;
+                    const isOpen = picked && resultKey(picked.food) === resultKey(food);
                     return (
-                      <div key={food.fdcId} className={`result-item ${isOpen ? 'result-item-open' : ''}`}>
+                      <div key={resultKey(food)} className={`result-item ${isOpen ? 'result-item-open' : ''}`}>
                         <div className="result-main">
                           <FoodThumb photo={foodPhotos[photoKey(food)]} size={46} />
                           <div className="result-left">
                             <p className="result-name">{food.name}</p>
                             <p className="result-macros">
+                              {food.source === 'openfoodfacts' ? <span className="result-world" title="From Open Food Facts, a worldwide product database">World · </span> : null}
                               {food.brand ? <span className="result-brand">{food.brand} · </span> : null}
                               {def.label}: {m.calories} kcal · {m.protein}g P · {m.carbs}g C · {m.fat}g F
                             </p>
@@ -1806,14 +1878,14 @@ function App() {
                     );
                   })}
                   <p className="result-source">
-                    Nutrition data: USDA FoodData Central · Photos: <a href="https://unsplash.com/?utm_source=lifeos_health&utm_medium=referral" target="_blank" rel="noopener noreferrer">Unsplash</a> and <a href="https://world.openfoodfacts.org" target="_blank" rel="noopener noreferrer">Open Food Facts</a>
+                    Nutrition data: USDA FoodData Central and <a href="https://world.openfoodfacts.org" target="_blank" rel="noopener noreferrer">Open Food Facts</a> (ODbL) · Photos: <a href="https://unsplash.com/?utm_source=lifeos_health&utm_medium=referral" target="_blank" rel="noopener noreferrer">Unsplash</a> and <a href="https://world.openfoodfacts.org" target="_blank" rel="noopener noreferrer">Open Food Facts</a>
                   </p>
                 </div>
               )}
             </div>
 
             {/* CUSTOM FOODS */}
-            <div className="log-card" style={{marginTop:'16px'}}>
+            <div className="log-card" id="custom-foods" style={{marginTop:'16px'}}>
               <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'12px'}}>
                 <div>
                   <h3 className="log-title" style={{marginBottom:'2px'}}>My Custom Foods</h3>

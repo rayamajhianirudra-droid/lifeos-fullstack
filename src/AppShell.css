@@ -116,3 +116,17 @@ body.dark .account-btn.is-danger, body.dark .account-warning { color: #FF8A80; }
 .units-option { border: 0; background: none; padding: 7px 14px; border-radius: 9px; font: inherit; font-size: 13px; font-weight: 600; color: var(--color-ink-secondary); cursor: pointer; }
 .units-option.is-active { background: var(--color-surface); color: var(--color-primary); box-shadow: 0 1px 3px rgba(0, 0, 0, .08); }
 .units-option:focus-visible { outline: 2px solid var(--color-primary-muted); outline-offset: 2px; }
+
+/* Food search extras: worldwide, your foods, add it yourself */
+.result-world { color: #1D7A5C; font-weight: 600; }
+body.dark .result-world { color: #7CE2B8; }
+.search-more { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 2px; }
+.search-more-btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; border-radius: 10px; border: 1px dashed var(--color-border);
+  background: var(--color-surface); color: var(--color-primary); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; text-align: left; }
+.search-more-btn:hover { background: var(--color-primary-light); }
+.search-more-btn:focus-visible, .my-food-chip:focus-visible { outline: 2px solid var(--color-primary-muted); outline-offset: 2px; }
+.search-more-note { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--color-ink-secondary); }
+.my-food-hits { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 10px 0 2px; }
+.my-food-label { font-size: 11px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase; color: var(--color-ink-secondary); }
+.my-food-chip { padding: 7px 12px; border-radius: 99px; border: 1px solid var(--color-border); background: var(--color-primary-light); color: var(--color-primary);
+  font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; }

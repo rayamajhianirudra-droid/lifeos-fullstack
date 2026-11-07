@@ -4,6 +4,7 @@ import lifeos_backend.repository.UserRepository;
 import lifeos_backend.service.JwtService;
 import lifeos_backend.service.RateLimiter;
 import lifeos_backend.service.FoodImageService;
+import lifeos_backend.service.OpenFoodFactsService;
 import lifeos_backend.service.UsageCounters;
 import lifeos_backend.service.UsdaFoodService;
 import org.springframework.http.HttpStatus;
@@ -27,19 +28,71 @@ public class FoodSearchController {
     private final RateLimiter rateLimiter;
     private final UsageCounters counters;
     private final FoodImageService images;
+    private final OpenFoodFactsService world;
 
     private static final int MAX_PHOTO_REQUESTS_PER_MINUTE = 40;
     private static final int MAX_PHOTO_ITEMS = 30;
 
     public FoodSearchController(UsdaFoodService usda, JwtService jwtService,
                                 UserRepository userRepository, RateLimiter rateLimiter,
-                                UsageCounters counters, FoodImageService images) {
+                                UsageCounters counters, FoodImageService images, OpenFoodFactsService world) {
         this.usda = usda;
         this.jwtService = jwtService;
         this.userRepository = userRepository;
         this.rateLimiter = rateLimiter;
         this.counters = counters;
         this.images = images;
+        this.world = world;
+    }
+
+    private Long userId(String auth) {
+        String email = jwtService.extractEmail(auth.replace("Bearer ", ""));
+        return userRepository.findByEmail(email).orElseThrow().getId();
+    }
+
+    private ResponseEntity<?> tooMany() {
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .body(Map.of("error", "Too many searches. Please wait a minute."));
+    }
+
+    /**
+     * GET /api/foods/world?q=  Packaged foods from around the world (Open Food Facts).
+     * The app calls this only when USDA found nothing or the user asks for it.
+     */
+    @GetMapping("/world")
+    public ResponseEntity<?> worldSearch(@RequestHeader("Authorization") String auth, @RequestParam("q") String q) {
+        Long id = userId(auth);
+        if (q == null || q.isBlank()) return ResponseEntity.ok(List.of());
+        if (q.length() > 80) return ResponseEntity.badRequest().body(Map.of("error", "Search is too long."));
+        if (!rateLimiter.tryAcquire("foods:user:" + id, MAX_SEARCHES_PER_MINUTE, Duration.ofMinutes(1))) return tooMany();
+        List<Map<String, Object>> foods = world.search(q);
+        if (foods == OpenFoodFactsService.BUSY) {
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                    .body(Map.of("error", "Worldwide search is busy right now. Please try again in a minute."));
+        }
+        if (foods == null) {
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                    .body(Map.of("error", "Worldwide food search is temporarily unavailable."));
+        }
+        return ResponseEntity.ok(foods);
+    }
+
+    /** GET /api/foods/barcode/{code}  One packaged food by its barcode (8-14 digits). */
+    @GetMapping("/barcode/{code}")
+    public ResponseEntity<?> barcode(@RequestHeader("Authorization") String auth, @PathVariable("code") String code) {
+        Long id = userId(auth);
+        if (OpenFoodFactsService.normalizeBarcode(code) == null) {
+            return ResponseEntity.badRequest().body(Map.of("error", "A barcode is 8 to 14 digits."));
+        }
+        if (!rateLimiter.tryAcquire("foods:user:" + id, MAX_SEARCHES_PER_MINUTE, Duration.ofMinutes(1))) return tooMany();
+        var result = world.product(code);
+        if (result == null) {
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                    .body(Map.of("error", "Barcode lookup is busy right now. Please try again in a minute."));
+        }
+        return result.<ResponseEntity<?>>map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(Map.of("error", "No food with that barcode yet. You can add it as your own food.")));
     }
 
     /** GET /api/foods/search?q=big mac  ->  normalized foods with per-100 g nutrients and real portions. */
